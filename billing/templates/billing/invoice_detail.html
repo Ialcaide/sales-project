@@ -1,0 +1,57 @@
+{% extends 'billing/base.html' %}
+{% block title %}Factura #{{ invoice.id }}{% endblock %}
+{% block content %}
+<div class="card shadow mb-4">
+  <div class="card-header bg-dark text-white">
+    <h4>Factura #{{ invoice.id }}</h4>
+  </div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <p><strong>Cliente:</strong> {{ invoice.customer.full_name }}</p>
+        <p><strong>Cédula/RUC:</strong> {{ invoice.customer.dni }}</p>
+      </div>
+      <div class="col-md-6 text-end">
+        <p><strong>Fecha:</strong> {{ invoice.invoice_date|date:"d/m/Y H:i" }}</p>
+        <p><strong>Factura #:</strong> {{ invoice.id }}</p>
+      </div>
+    </div>
+    <table class="table table-bordered">
+      <thead class="table-dark">
+        <tr>
+          <th>Producto</th>
+          <th class="text-center">Cantidad</th>
+          <th class="text-end">Precio unitario</th>
+          <th class="text-end">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for detail in invoice.details.all %}
+        <tr>
+          <td>{{ detail.product.name }}</td>
+          <td class="text-center">{{ detail.quantity }}</td>
+          <td class="text-end">${{ detail.unit_price }}</td>
+          <td class="text-end">${{ detail.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" class="text-end fw-bold">Subtotal:</td>
+          <td class="text-end">${{ invoice.subtotal }}</td>
+        </tr>
+        <tr>
+          <td colspan="3" class="text-end fw-bold">IVA (15%):</td>
+          <td class="text-end">${{ invoice.tax }}</td>
+        </tr>
+        <tr class="table-warning">
+          <td colspan="3" class="text-end fw-bold fs-5">TOTAL:</td>
+          <td class="text-end fw-bold fs-5">${{ invoice.total }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <a href="{% url 'billing:invoice_list' %}" class="btn btn-secondary">Volver al listado</a>
+    <a href="{% url 'billing:invoice_delete' invoice.pk %}" class="btn btn-danger">Eliminar</a>
+  </div>
+</div>
+{% endblock %}

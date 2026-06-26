@@ -1,0 +1,59 @@
+samsung = Brand.objects.create(name='Samsung', description='Electronics')
+apple = Brand.objects.create(name='Apple')
+electronics = ProductGroup.objects.create(name='Electronics')
+dist = Supplier.objects.create(name='TechDist', email='info@tech.com')
+global_s = Supplier.objects.create(name='GlobalSupply')
+phone = Product.objects.create(name='Galaxy S24', brand=samsung, group=electronics, unit_price=999.99, stock=50)
+phone.suppliers.add(dist, global_s)  # M2M
+client = Customer.objects.create(dni='0912345678', first_name='Juan', last_name='Perez')
+profile = CustomerProfile.objects.create(customer=client, taxpayer_type='ruc', payment_terms='credit_30', credit_limit=5000)
+inv = Invoice.objects.create(customer=client, subtotal=999.99, tax=120, total=1119.99)
+det = InvoiceDetail.objects.create(invoice=inv, product=phone, quantity=1, unit_price=phone.unit_price)
+
+Brand.objects.all()                         # Todos
+Brand.objects.get(name='Samsung')            # Uno
+Product.objects.filter(unit_price__gt=500)   # Precio > 500
+Product.objects.filter(unit_price__range=(100,500))  # Entre
+Product.objects.filter(name__icontains='gal')  # Contiene
+Product.objects.exclude(stock=0)             # Excluir
+Product.objects.order_by('-unit_price')      # Ordenar
+Product.objects.count()                      # Contar
+Product.objects.filter(stock=0).exists()     # Existe?
+
+b = Brand.objects.get(name='Samsung'); b.description = 'Updated'; b.save()
+Product.objects.filter(stock=0).update(is_active=False)  # Masivo
+p = Product.objects.get(name='Galaxy S24')
+p.suppliers.add(global_s)       # M2M: agregar
+p.suppliers.remove(global_s)    # M2M: quitar
+p.suppliers.clear()             # M2M: quitar todos
+p.suppliers.set([dist])         # M2M: reemplazar
+c = Customer.objects.get(dni='0912345678')
+c.profile.credit_limit = 10000; c.profile.save()  # OneToOne
+from django.db.models import F
+Product.objects.update(unit_price=F('unit_price') * 1.10)  # F()
+
+Brand.objects.get(name='Nike').delete()
+Product.objects.filter(is_active=False).delete()
+product.suppliers.remove(dist)  # Solo quita relación M2M
+
+# FK
+product.brand.name
+samsung.products.all()
+# M2M
+product.suppliers.all()
+supplier.products.all()
+Product.objects.filter(suppliers__name='TechDist')
+# OneToOne
+client.profile.credit_limit
+profile.customer.full_name
+Customer.objects.filter(profile__taxpayer_type='ruc')
+# Q()
+from django.db.models import Q
+Product.objects.filter(Q(brand__name='Samsung') | Q(unit_price__gt=1000))
+
+from django.db.models import Sum, Avg, Max, Min, Count
+Product.objects.aggregate(avg=Avg('unit_price'))
+Product.objects.aggregate(max=Max('unit_price'), min=Min('unit_price'))
+Invoice.objects.filter(customer__dni='0912345678').aggregate(total=Sum('total'))
+Brand.objects.annotate(n=Count('products')).values('name', 'n')
+Product.objects.annotate(ns=Count('suppliers')).values('name', 'ns')

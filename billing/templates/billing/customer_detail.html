@@ -1,0 +1,87 @@
+{% extends 'billing/base.html' %}
+{% block title %}{{ customer.full_name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow border-0">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Detalle del cliente</h4>
+        {% if customer.is_active %}
+          <span class="badge bg-success">Activo</span>
+        {% else %}
+          <span class="badge bg-danger">Inactivo</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-4">
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Nombre completo</p>
+            <p class="fw-bold fs-5">{{ customer.full_name }}</p>
+          </div>
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Cédula / RUC</p>
+            <p class="fw-bold fs-5">{{ customer.dni }}</p>
+          </div>
+        </div>
+        <hr>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Correo electrónico</p>
+            <p>{{ customer.email|default:"No registrado" }}</p>
+          </div>
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Teléfono</p>
+            <p>{{ customer.phone|default:"No registrado" }}</p>
+          </div>
+        </div>
+        <div class="mb-3">
+          <p class="text-muted small mb-1">Dirección</p>
+          <p>{{ customer.address|default:"No registrada" }}</p>
+        </div>
+        <hr>
+        <div class="row">
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Fecha de registro</p>
+            <p>{{ customer.created_at|date:"d/m/Y H:i" }}</p>
+          </div>
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Última actualización</p>
+            <p>{{ customer.updated_at|date:"d/m/Y H:i" }}</p>
+          </div>
+        </div>
+        <hr>
+        <h5 class="mb-3">Facturas del cliente</h5>
+        <table class="table table-sm table-hover">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Fecha</th>
+              <th class="text-end">Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in customer.invoices.all %}
+            <tr>
+              <td>{{ inv.id }}</td>
+              <td>{{ inv.invoice_date|date:"d/m/Y" }}</td>
+              <td class="text-end fw-bold">${{ inv.total }}</td>
+              <td>
+                <a href="{% url 'billing:invoice_detail' inv.pk %}" class="btn btn-sm btn-info">Ver</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted">Sin facturas</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <a href="{% url 'billing:customer_list' %}" class="btn btn-outline-secondary">Volver</a>
+        <a href="{% url 'billing:customer_update' customer.pk %}" class="btn btn-warning">Editar</a>
+        <a href="{% url 'billing:customer_delete' customer.pk %}" class="btn btn-danger">Borrar</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

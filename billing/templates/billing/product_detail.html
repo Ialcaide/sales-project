@@ -1,0 +1,95 @@
+{% extends 'billing/base.html' %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block content %}
+<div class="card shadow mb-4">
+  <div class="card-header bg-primary text-white">
+    <h4 class="mb-0">{{ product.name }}</h4>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-5 text-center">
+      {% if product.image %}
+  <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
+{% else %}
+  <img src="{{ MEDIA_URL }}no-image.png" alt="Sin imagen" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
+{% endif %}
+      </div>
+      <div class="col-md-7">
+        <table class="table">
+          <tr>
+            <th style="width:160px;">Nombre</th>
+            <td>{{ product.name }}</td>
+          </tr>
+          <tr>
+            <th>Descripción</th>
+            <td>{{ product.description|default:"-" }}</td>
+          </tr>
+          <tr>
+            <th>Marca</th>
+            <td>{{ product.brand.name }}</td>
+          </tr>
+          <tr>
+            <th>Grupo</th>
+            <td>{{ product.group.name }}</td>
+          </tr>
+          <tr>
+            <th>Precio unitario</th>
+            <td>${{ product.unit_price }}</td>
+          </tr>
+          <tr>
+            <th>Stock</th>
+            <td>{{ product.stock }}</td>
+          </tr>
+          <tr>
+            <th>Proveedores</th>
+            <td>
+              {% for s in product.suppliers.all %}
+                <span class="badge bg-info">{{ s.name }}</span>
+              {% empty %}
+                <span class="text-muted">Ninguno</span>
+              {% endfor %}
+            </td>
+          </tr>
+          <tr>
+  <th>Último costo de compra</th>
+  <td>
+    {% if product.last_cost %}
+      ${{ product.last_cost }}
+    {% else %}
+      <span class="text-muted">Sin compras registradas</span>
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Margen de ganancia</th>
+  <td>
+    {% if product.margin %}
+      <span class="badge {% if product.margin > 20 %}bg-success{% elif product.margin > 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+        {{ product.margin }}%
+      </span>
+    {% else %}
+      <span class="text-muted">Sin datos de costo</span>
+    {% endif %}
+  </td>
+</tr>
+          <tr>
+            <th>Estado</th>
+            <td>
+              {% if product.is_active %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-danger">Inactivo</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <hr>
+    <a href="{% url 'billing:product_list' %}" class="btn btn-secondary">Volver al listado</a>
+    <a href="{% url 'billing:product_update' product.pk %}" class="btn btn-warning">Editar</a>
+    <a href="{% url 'billing:product_delete' product.pk %}" class="btn btn-danger">Borrar</a>
+  </div>
+</div>
+{% endblock %}

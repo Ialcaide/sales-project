@@ -1,0 +1,6 @@
+venvsales/
+__pycache__/
+*.pyc
+*.sqlite3
+media/products/
+.env

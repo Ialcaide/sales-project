@@ -14,6 +14,22 @@ from django.db import models
 from shared.mixins import StaffRequiredMixin
 from shared.decorators import audit_action
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
+from shared.mixins import StaffRequiredMixin, GroupRequiredMixin
+
+class CustomerUpdateView(LoginRequiredMixin, GroupRequiredMixin, UpdateView):
+    model = Customer
+    fields = ['dni', 'first_name', 'last_name', 'email', 'phone', 'address', 'is_active']
+    template_name = 'billing/customer_form.html'
+    success_url = reverse_lazy('billing:customer_list')
+    group_required = ['Administrador', 'Analista de Compras']
+    group_redirect_url = '/customers/'
+
+class CustomerDeleteView(LoginRequiredMixin, GroupRequiredMixin, DeleteView):
+    model = Customer
+    template_name = 'billing/customer_confirm_delete.html'
+    success_url = reverse_lazy('billing:customer_list')
+    group_required = ['Administrador', 'Analista de Compras']
+    group_redirect_url = '/customers/'
 
 @login_required
 def home(request):
@@ -589,13 +605,135 @@ def invoice_detail(request, pk):
         pk=pk
     )
     return render(request, 'billing/invoice_detail.html', {'invoice': invoice})
+    
+@login_required
+def invoice_pdf(request, pk):
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from django.http import HttpResponse
+    import io
+
+    invoice = get_object_or_404(
+        Invoice.objects.select_related('customer').prefetch_related('details__product'),
+        pk=pk
+    )
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+        topMargin=2*cm, bottomMargin=2*cm,
+        leftMargin=2*cm, rightMargin=2*cm)
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Header
+    title_style = ParagraphStyle('title', parent=styles['Normal'],
+        fontSize=22, fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#4e54c8'), spaceAfter=4)
+    sub_style = ParagraphStyle('sub', parent=styles['Normal'],
+        fontSize=9, textColor=colors.HexColor('#94a3b8'), spaceAfter=2)
+    normal = ParagraphStyle('normal', parent=styles['Normal'],
+        fontSize=9, textColor=colors.HexColor('#334155'), spaceAfter=2)
+    bold = ParagraphStyle('bold', parent=styles['Normal'],
+        fontSize=9, fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#334155'), spaceAfter=2)
+
+    story.append(Paragraph('TecnoStock S.A.', title_style))
+    story.append(Paragraph('Sistema de Ventas y Facturación', sub_style))
+    story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
+    story.append(Spacer(1, 0.3*cm))
+
+    # Info factura y cliente
+    info_data = [
+        [Paragraph('<b>FACTURA</b>', ParagraphStyle('', parent=styles['Normal'], fontSize=14, fontName='Helvetica-Bold', textColor=colors.HexColor('#4e54c8'))),
+         Paragraph(f'<b>Factura N°:</b> {invoice.id:04d}', bold)],
+        ['', Paragraph(f'<b>Fecha:</b> {invoice.invoice_date.strftime("%d/%m/%Y %H:%M")}', normal)],
+        [Paragraph('<b>Cliente:</b>', bold), Paragraph(f'{invoice.customer.full_name}', normal)],
+        [Paragraph('<b>Cédula/RUC:</b>', bold), Paragraph(f'{invoice.customer.dni}', normal)],
+        [Paragraph('<b>Correo:</b>', bold), Paragraph(f'{invoice.customer.email or "-"}', normal)],
+        [Paragraph('<b>Teléfono:</b>', bold), Paragraph(f'{invoice.customer.phone or "-"}', normal)],
+    ]
+    info_table = Table(info_data, colWidths=[8*cm, 9*cm])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 0.4*cm))
+    story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
+    story.append(Spacer(1, 0.3*cm))
+
+    # Tabla de productos
+    headers = ['Producto', 'Cantidad', 'Precio Unitario', 'Subtotal']
+    rows = [headers]
+    for d in invoice.details.all():
+        rows.append([
+            d.product.name,
+            str(d.quantity),
+            f'${d.unit_price}',
+            f'${d.subtotal}',
+        ])
+
+    prod_table = Table(rows, colWidths=[9*cm, 2.5*cm, 3.5*cm, 3*cm])
+    prod_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#4e54c8')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (2,0), (-1,-1), 'RIGHT'),
+        ('ALIGN', (3,0), (-1,-1), 'RIGHT'),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')]),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('LEFTPADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(prod_table)
+    story.append(Spacer(1, 0.4*cm))
+
+    # Totales
+    totales_data = [
+        ['', 'Subtotal:', f'${invoice.subtotal}'],
+        ['', 'IVA (15%):', f'${invoice.tax}'],
+        ['', 'TOTAL:', f'${invoice.total}'],
+    ]
+    totales_table = Table(totales_data, colWidths=[9*cm, 4*cm, 5*cm])
+    totales_table.setStyle(TableStyle([
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (1,2), (-1,2), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('FONTSIZE', (1,2), (-1,2), 11),
+        ('TEXTCOLOR', (1,2), (-1,2), colors.HexColor('#4e54c8')),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('LINEABOVE', (1,2), (-1,2), 1.5, colors.HexColor('#4e54c8')),
+    ]))
+    story.append(totales_table)
+    story.append(Spacer(1, 0.5*cm))
+    story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
+    story.append(Spacer(1, 0.2*cm))
+    story.append(Paragraph('Gracias por su compra — TecnoStock S.A.', sub_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="factura_{invoice.id:04d}.pdf"'
+    return response
 
 @login_required
 def invoice_delete(request, pk):
+    if not (request.user.is_superuser or request.user.groups.filter(name='Administrador').exists()):
+        from django.contrib import messages
+        messages.error(request, 'No tienes permiso para eliminar facturas.')
+        return redirect('billing:invoice_list')
     invoice = get_object_or_404(Invoice, pk=pk)
     if request.method == 'POST':
         invoice_id = invoice.id
         invoice.delete()
-        messages.success(request, f'Invoice #{invoice_id} deleted!')
+        messages.success(request, f'Factura #{invoice_id} eliminada!')
         return redirect('billing:invoice_list')
     return render(request, 'billing/invoice_confirm_delete.html', {'object': invoice})

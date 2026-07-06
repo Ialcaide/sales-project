@@ -1,4 +1,5 @@
 {% extends 'billing/base.html' %}
+{% load security_tags %}
 {% block title %}Facturas{% endblock %}
 {% block content %}
 
@@ -80,7 +81,9 @@
       <td class="text-end fw-bold">${{ inv.total }}</td>
       <td>
         <a href="{% url 'billing:invoice_detail' inv.pk %}" class="btn btn-sm btn-info">Ver</a>
-        <a href="{% url 'billing:invoice_delete' inv.pk %}" class="btn btn-sm btn-danger">Borrar</a>
+        {% if user|has_group:'Administrador' or user.is_superuser %}
+          <a href="{% url 'billing:invoice_delete' inv.pk %}" class="btn btn-sm btn-danger">Borrar</a>
+        {% endif %}
       </td>
     </tr>
     {% empty %}

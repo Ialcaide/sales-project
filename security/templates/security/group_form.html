@@ -1,0 +1,28 @@
+{% extends 'billing/base.html' %}
+{% block title %}Rol{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white"><h4>Rol</h4></div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-bold">Nombre del rol</label>
+            {{ form.name }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Permisos</label>
+            <div class="border rounded p-2" style="max-height:300px; overflow-y:auto;">
+              {{ form.permissions }}
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+          <a href="{% url 'security:group_list' %}" class="btn btn-secondary">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

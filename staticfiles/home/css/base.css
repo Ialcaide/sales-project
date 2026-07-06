@@ -1,0 +1,342 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+body {
+  background-color: #f4f6f9;
+  font-family: 'Outfit', sans-serif;
+  color: #334155;
+}
+
+/* Unificación de la Barra de Navegación */
+.navbar {
+  background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+  box-shadow: 0 4px 20px rgba(78, 84, 200, 0.15);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 0;
+  transition: all 0.3s ease;
+}
+
+.navbar-brand {
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+  transition: opacity 0.2s ease;
+}
+
+.navbar-brand:hover {
+  opacity: 0.95;
+}
+
+.nav-link {
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  padding: 8px 12px !important;
+}
+
+.nav-link:hover {
+  color: rgba(255, 255, 255, 1) !important;
+  transform: translateY(-0.5px);
+}
+
+.dropdown-menu {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  padding: 8px;
+  background-color: #ffffff;
+}
+
+.dropdown-item {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  color: #475569;
+  font-size: 0.92rem;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f5f9;
+  color: #4e54c8;
+}
+
+/* Estilos de Tarjetas (Cards) */
+.card {
+  border: none !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.035) !important;
+  background-color: #ffffff;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  margin-bottom: 1.5rem;
+}
+
+/* Solo recortamos cabecera/imagen para mantener las esquinas redondeadas;
+   el .card completo no debe recortar (ocultaría dropdowns como "Filtros"). */
+.card-header:first-child {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.card-img-top,
+.card-img {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Cabeceras de tarjetas consistentes */
+.card-header {
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 16px 24px !important;
+  font-weight: 600;
+}
+
+/* Reemplazar bg-primary, bg-dark, bg-success en cabeceras por gradiente unificado */
+.card-header.bg-primary, 
+.card-header.bg-dark, 
+.card-header.bg-success,
+.card-header[style*="background-color:#f6c23e"] {
+  background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+.card-header h4, 
+.card-header h5, 
+.card-header .fs-5 {
+  margin-bottom: 0;
+  font-weight: 700;
+  font-size: 1.15rem !important;
+  color: #ffffff !important;
+}
+
+.card-header.bg-light {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.card-header.bg-light .fw-bold {
+  color: #334155 !important;
+}
+
+/* Estilos de Formularios Premium */
+.form-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.form-control, 
+.form-select {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  color: #334155;
+  font-size: 0.95rem;
+  background-color: #ffffff;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.form-control:focus, 
+.form-select:focus {
+  border-color: #8f94fb !important;
+  box-shadow: 0 0 0 3.5px rgba(143, 148, 251, 0.25) !important;
+  outline: none;
+  background-color: #ffffff;
+}
+
+.form-control::placeholder {
+  color: #94a3b8;
+}
+
+.form-control[readonly] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+/* Checkbox Inputs */
+.form-check-input {
+  border-radius: 6px;
+  border-color: #cbd5e1;
+  cursor: pointer;
+}
+
+.form-check-input:checked {
+  background-color: #4e54c8;
+  border-color: #4e54c8;
+}
+
+.form-check-input:focus {
+  box-shadow: 0 0 0 3px rgba(143, 148, 251, 0.25);
+  border-color: #8f94fb;
+}
+
+/* Botones Premium */
+.btn-primary, 
+.btn-success, 
+.btn-warning,
+.btn-info,
+.btn-auth-custom {
+  background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+  border: none !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  font-weight: 600;
+  padding: 10px 20px;
+  box-shadow: 0 4px 12px rgba(78, 84, 200, 0.18);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+}
+
+.btn-primary:hover, 
+.btn-success:hover, 
+.btn-warning:hover,
+.btn-info:hover {
+  background: linear-gradient(135deg, #3f44af, #7c81df) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(78, 84, 200, 0.28);
+}
+
+.btn-primary:active, 
+.btn-success:active, 
+.btn-warning:active,
+.btn-info:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 2px 6px rgba(78, 84, 200, 0.15);
+}
+
+.btn-secondary, 
+.btn-outline-secondary {
+  border-radius: 10px !important;
+  font-weight: 600;
+  padding: 10px 20px;
+  transition: all 0.2s ease;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.btn-secondary:hover, 
+.btn-outline-secondary:hover {
+  background-color: #e2e8f0;
+  color: #334155 !important;
+  transform: translateY(-1px);
+}
+
+/* Tablas */
+.table {
+  border-color: #e2e8f0;
+  vertical-align: middle;
+}
+
+.table thead th {
+  background-color: #f8fafc !important;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 16px;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.table tbody td {
+  padding: 14px 16px;
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: #f8fafc;
+}
+
+.table-hover tbody tr:hover {
+  background-color: #f1f5f9;
+}
+
+/* Alertas */
+.alert {
+  border-radius: 12px;
+  border: none;
+  font-weight: 500;
+  padding: 14px 18px;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.alert-danger {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border-left: 4px solid #ef4444;
+}
+
+.alert-success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border-left: 4px solid #22c55e;
+}
+
+.alert-warning {
+  background-color: #fffbeb;
+  color: #b45309;
+  border-left: 4px solid #f59e0b;
+}
+
+.alert-info {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border-left: 4px solid #0ea5e9;
+}
+
+/* Tarjetas de estadísticas del Dashboard */
+.card-stat {
+  border: none;
+  border-radius: 16px !important;
+  color: white;
+  transition: transform .25s ease, box-shadow .25s ease;
+  overflow: hidden;
+}
+
+.card-stat:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15) !important;
+}
+
+.card-stat .card-footer {
+  background: rgba(0, 0, 0, 0.12);
+  border: none;
+  border-radius: 0 0 16px 16px;
+  padding: 12px 20px;
+}
+
+.icono-grande {
+  font-size: 2.5rem;
+  opacity: 0.35;
+}
+
+/* Footer */
+footer {
+  background: #1e293b;
+  color: #94a3b8;
+  text-align: center;
+  padding: 20px;
+  margin-top: 50px;
+  border-top: 1px solid #334155;
+  border-radius: 16px 16px 0 0;
+}
+
+/* Permitir que los dropdowns de filtros se vean fuera de la card */
+.card {
+  overflow: visible !important;
+}
+
+.card-body {
+  overflow: visible !important;
+}

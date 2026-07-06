@@ -1,7 +1,7 @@
 {% extends 'billing/base.html' %}
 {% block title %}Marcas{% endblock %}
-{% block content %}
 
+{% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Marcas</h2>
   <div class="d-flex gap-2">
@@ -11,41 +11,37 @@
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" id="filtros-form">
-      <div class="d-flex align-items-center gap-2">
-        <div class="input-group" style="max-width:350px;">
-          <span class="input-group-text bg-white border-end-0">🔍</span>
-          <input type="text" name="q" value="{{ query }}" class="form-control border-start-0" placeholder="Buscar marca...">
+<form method="get" id="filtros-form" class="mb-3">
+  <div class="d-flex align-items-center gap-2">
+    <div class="input-group" style="max-width:350px;">
+      <span class="input-group-text bg-white border-end-0">🔍</span>
+      <input type="text" name="q" value="{{ query }}" class="form-control border-start-0" placeholder="Buscar marca...">
+    </div>
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownFiltros" data-bs-toggle="dropdown" aria-expanded="false">
+        Filtros
+      </button>
+      <div class="dropdown-menu p-3" aria-labelledby="dropdownFiltros" style="min-width:250px;" onclick="event.stopPropagation()">
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">Estado</label>
+          <select name="is_active" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="1" {% if is_active == '1' %}selected{% endif %}>Activo</option>
+            <option value="0" {% if is_active == '0' %}selected{% endif %}>Inactivo</option>
+          </select>
         </div>
-        <div class="dropdown">
-          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            Filtros
-          </button>
-          <div class="dropdown-menu p-3" style="min-width:250px;" onclick="event.stopPropagation()">
-            <div class="mb-2">
-              <label class="form-label small text-muted mb-1">Estado</label>
-              <select name="is_active" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="1" {% if is_active == '1' %}selected{% endif %}>Activo</option>
-                <option value="0" {% if is_active == '0' %}selected{% endif %}>Inactivo</option>
-              </select>
-            </div>
-            <div class="d-flex justify-content-end gap-2 mt-2">
-              <a href="{% url 'billing:brand_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-              <button type="submit" class="btn btn-sm btn-primary">Aplicar</button>
-            </div>
-          </div>
+        <div class="d-flex justify-content-end gap-2 mt-2">
+          <a href="{% url 'billing:brand_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+          <button type="button" class="btn btn-sm btn-primary" onclick="document.getElementById('filtros-form').submit();">Aplicar</button>
         </div>
-        <button type="submit" class="btn btn-primary">Buscar</button>
-        {% if query or is_active %}
-          <a href="{% url 'billing:brand_list' %}" class="btn btn-outline-secondary">✕ Limpiar</a>
-        {% endif %}
       </div>
-    </form>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('filtros-form').submit();">Buscar</button>
+    {% if query or is_active %}
+      <a href="{% url 'billing:brand_list' %}" class="btn btn-outline-secondary">✕ Limpiar</a>
+    {% endif %}
   </div>
-</div>
+</form>
 
 <table class="table table-striped table-hover">
   <thead class="table-dark">
@@ -100,5 +96,4 @@
   </ul>
 </nav>
 {% endif %}
-
 {% endblock %}

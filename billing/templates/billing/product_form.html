@@ -1,99 +1,146 @@
 {% extends 'billing/base.html' %}
+{% load static %}
 {% block title %}Producto{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-10">
-    <div class="card shadow border-0">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">{{ form.instance.pk|yesno:"Editar producto,Nuevo producto" }}</h4>
-      </div>
-      <div class="card-body p-4">
-        <form method="post" enctype="multipart/form-data">
-          {% csrf_token %}
 
-          <div class="row mb-4">
-            <div class="col-md-4 text-center">
-              <div class="d-flex align-items-center justify-content-center bg-light rounded-3 border mb-2" style="width:100%; height:220px; overflow:hidden;">
-                {% if form.instance.image %}
-                  <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}" style="width:100%; height:100%; object-fit:cover;">
-                {% else %}
-                  <img src="{{ MEDIA_URL }}no-image.png" alt="Sin imagen" style="width:100%; height:100%; object-fit:cover;">
-                {% endif %}
-              </div>
-              <label class="form-label text-muted small d-block mb-1">Cambiar imagen</label>
-              {{ form.image }}
-              {% for error in form.image.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-            </div>
-
-            <div class="col-md-8">
-              <div class="row">
-                <div class="col-md-12 mb-3">
-                  <label class="form-label fw-bold">Nombre</label>
-                  {{ form.name }}
-                  {% for error in form.name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label fw-bold">Marca</label>
-                  {{ form.brand }}
-                  {% for error in form.brand.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label fw-bold">Grupo</label>
-                  {{ form.group }}
-                  {% for error in form.group.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label fw-bold">Precio unitario</label>
-                  <div class="input-group">
-                    <span class="input-group-text">$</span>
-                    {{ form.unit_price }}
-                  </div>
-                  {% for error in form.unit_price.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label fw-bold">Stock</label>
-                  {{ form.stock }}
-                  {% for error in form.stock.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label class="form-label fw-bold">Descripción</label>
-            {{ form.description }}
-            {% for error in form.description.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-          </div>
-
-          <div class="mb-4">
-            <label class="form-label fw-bold">Proveedores</label>
-            {{ form.suppliers }}
-            <small class="text-muted">Mantén Ctrl presionado para elegir varios</small>
-            {% for error in form.suppliers.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-          </div>
-
-          <div class="d-flex flex-wrap align-items-center gap-4 mb-4 p-3 bg-light rounded-3">
-            <div class="form-check mb-0">
-              {{ form.is_active }}
-              <label class="form-check-label fw-bold">Activo</label>
-            </div>
-            {% if form.instance.pk %}
-            <div class="text-muted small">
-              <strong>Creado:</strong> {{ form.instance.created_at|date:"d/m/Y H:i" }}
-            </div>
-            <div class="text-muted small">
-              <strong>Última edición:</strong> {{ form.instance.updated_at|date:"d/m/Y H:i" }}
-            </div>
-            {% endif %}
-          </div>
-
-          <div class="d-flex justify-content-end gap-2 border-top pt-3">
-            <a href="{% url 'billing:product_list' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
-            <button type="submit" class="btn btn-primary px-4">Guardar cambios</button>
-          </div>
-        </form>
-      </div>
+<div class="form-wrapper">
+  <div class="form-header">
+    <div class="form-header-icon">
+      <i class="bi bi-box-seam"></i>
+    </div>
+    <div class="form-header-text">
+      <h4>{{ form.instance.pk|yesno:"Editar producto,Nuevo producto" }}</h4>
+      <p>Gestiona la información del producto</p>
     </div>
   </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="row g-4">
+
+      <!-- IMAGEN -->
+      <div class="col-md-3 text-center">
+        <div style="width:100%; height:200px; border-radius:14px; border:2px dashed #c7d2fe; overflow:hidden; background:#f9fafb; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+          {% if form.instance.image %}
+            <img src="{{ form.instance.image.url }}" alt="{{ form.instance.name }}" style="width:100%; height:100%; object-fit:cover;">
+          {% else %}
+            <img src="{{ MEDIA_URL }}no-image.png" alt="Sin imagen" style="width:100%; height:100%; object-fit:cover;">
+          {% endif %}
+        </div>
+        <label class="field-label">Cambiar imagen</label>
+        {{ form.image }}
+        {% if form.image.errors %}<div class="text-danger small mt-1">{{ form.image.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <!-- CAMPOS PRINCIPALES -->
+      <div class="col-md-9">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="field-label">Nombre</label>
+            <div class="input-with-icon">
+              <i class="bi bi-box-seam icon"></i>
+              <input type="text" name="name" value="{{ form.name.value|default:'' }}"
+                class="form-control"
+                style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+            </div>
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="field-label">Marca</label>
+            <div class="input-with-icon">
+              <i class="bi bi-tag icon"></i>
+              {{ form.brand }}
+            </div>
+            {% if form.brand.errors %}<div class="text-danger small mt-1">{{ form.brand.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="field-label">Grupo</label>
+            <div class="input-with-icon">
+              <i class="bi bi-grid icon"></i>
+              {{ form.group }}
+            </div>
+            {% if form.group.errors %}<div class="text-danger small mt-1">{{ form.group.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="field-label">Precio unitario</label>
+            <div class="input-with-icon">
+              <i class="bi bi-currency-dollar icon"></i>
+              <input type="number" name="unit_price" value="{{ form.unit_price.value|default:'' }}"
+                step="0.01" class="form-control"
+                style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+            </div>
+            {% if form.unit_price.errors %}<div class="text-danger small mt-1">{{ form.unit_price.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="field-label">Stock actual</label>
+            <div class="input-with-icon">
+              <i class="bi bi-archive icon"></i>
+              <input type="text" class="form-control" value="{{ form.instance.stock }}" readonly
+                style="border:1.5px solid #e2e8f0; border-radius:12px; padding:11px 16px 11px 44px; background:#f1f5f9; width:100%; color:#64748b;">
+            </div>
+            <small style="font-size:0.78rem; color:#94a3b8;">Se actualiza con compras y ventas</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- DESCRIPCIÓN -->
+      <div class="col-12">
+        <label class="field-label">Descripción</label>
+        <div class="input-icon-top">
+          <i class="bi bi-text-paragraph icon"></i>
+          <textarea name="description" class="form-control"
+            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%; min-height:100px; resize:vertical;">{{ form.description.value|default:'' }}</textarea>
+        </div>
+        {% if form.description.errors %}<div class="text-danger small mt-1">{{ form.description.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <!-- PROVEEDORES -->
+      <div class="col-12">
+        <label class="field-label">Proveedores</label>
+        {{ form.suppliers }}
+        <small style="font-size:0.78rem; color:#94a3b8;">Mantén Ctrl presionado para elegir varios</small>
+        {% if form.suppliers.errors %}<div class="text-danger small mt-1">{{ form.suppliers.errors|join:", " }}</div>{% endif %}
+      </div>
+
+      <!-- ACTIVO + FECHAS -->
+      <div class="col-12">
+        <div class="active-box">
+          <input type="checkbox" name="is_active" class="form-check-input"
+            {% if form.is_active.value %}checked{% endif %}
+            style="width:22px; height:22px; border-radius:6px; cursor:pointer; flex-shrink:0;">
+          <div class="active-box-text">
+            <strong>Producto Activo</strong>
+            <span>Marque esta opción si el producto está activo y disponible para la venta.</span>
+          </div>
+          {% if form.instance.pk %}
+          <div class="ms-auto text-end" style="font-size:0.82rem; color:#94a3b8;">
+            <div><i class="bi bi-calendar-plus me-1"></i><strong>Creado:</strong> {{ form.instance.created_at|date:"d/m/Y H:i" }}</div>
+            <div><i class="bi bi-clock me-1"></i><strong>Editado:</strong> {{ form.instance.updated_at|date:"d/m/Y H:i" }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+    <div class="row g-3 mt-4">
+      <div class="col-md-6">
+        <button type="submit" class="btn btn-guardar w-100">
+          <i class="bi bi-floppy me-2"></i>Guardar cambios
+        </button>
+      </div>
+      <div class="col-md-6">
+        <a href="{% url 'billing:product_list' %}" class="btn btn-cancelar w-100 text-center">
+          <i class="bi bi-x-circle me-2"></i>Cancelar
+        </a>
+      </div>
+    </div>
+  </form>
 </div>
+
 {% endblock %}

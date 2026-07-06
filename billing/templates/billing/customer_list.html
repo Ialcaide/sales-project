@@ -1,4 +1,5 @@
 {% extends 'billing/base.html' %}
+{% load security_tags %}
 {% block title %}Clientes{% endblock %}
 {% block content %}
 
@@ -20,10 +21,10 @@
           <input type="text" name="q" value="{{ query }}" class="form-control border-start-0" placeholder="Nombre, apellido o cédula...">
         </div>
         <div class="dropdown">
-          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownFiltros" data-bs-toggle="dropdown" aria-expanded="false">
             Filtros
           </button>
-          <div class="dropdown-menu p-3" style="min-width:250px;" onclick="event.stopPropagation()">
+          <div class="dropdown-menu p-3" aria-labelledby="dropdownFiltros" style="min-width:250px;" onclick="event.stopPropagation()">
             <div class="mb-2">
               <label class="form-label small text-muted mb-1">Estado</label>
               <select name="is_active" class="form-select form-select-sm">
@@ -66,11 +67,13 @@
           <span class="badge bg-danger">No</span>
         {% endif %}
       </td>
-      <td>
-        <a href="{% url 'billing:customer_detail' item.pk %}" class="btn btn-sm btn-info">Ver</a>
+   <td>
+      <a href="{% url 'billing:customer_detail' item.pk %}" class="btn btn-sm btn-info">Ver</a>
+      {% if user|has_group:'Administrador' or user.is_superuser %}
         <a href="{% url 'billing:customer_update' item.pk %}" class="btn btn-sm btn-warning">Editar</a>
         <a href="{% url 'billing:customer_delete' item.pk %}" class="btn btn-sm btn-danger">Borrar</a>
-      </td>
+      {% endif %}
+    </td>
     </tr>
     {% empty %}
     <tr><td colspan="7" class="text-center">No hay clientes registrados</td></tr>

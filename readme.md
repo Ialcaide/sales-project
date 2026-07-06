@@ -566,4 +566,4 @@ Panel de administración: `http://127.0.0.1:8000/admin/`
 
 ---
 
-*Desarrollado para la asignatura de Programación / Desarrollo Web con Python (Django) · 4to Semestre · Universidad Estatal de Milagro (UNEMI)*
+*Desarrollado para la asignatura de Programación / Desarrollo Web con Python (Django) · 4to Semestre · Universidad Estatal de Milagro (UNEMI)*# sales-project

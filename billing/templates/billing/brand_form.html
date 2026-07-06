@@ -1,27 +1,70 @@
 {% extends 'billing/base.html' %}
+{% load static %}
 {% block title %}{{ title }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'home/css/forms.css' %}">
+{% endblock %}
 {% block content %}
+<style>
+.form-card.card { overflow:visible!important; border-radius:16px!important; box-shadow:0 8px 30px rgba(78,84,200,0.15)!important; animation:slideUp 0.3s ease; }
+@keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+.form-card .card-header { background:linear-gradient(135deg,#4e54c8,#8f94fb)!important; color:white!important; border-radius:16px 16px 0 0!important; padding:20px 28px!important; border:none!important; }
+.form-card .card-header h5 { font-size:1.15rem; font-weight:700; margin:0; color:white!important; }
+.form-card .card-body { padding:32px!important; }
+.form-card .form-label { font-weight:600; font-size:0.88rem; color:#475569; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em; display:block; }
+.form-card .form-control, .form-card .form-select { border:1.5px solid #e2e8f0!important; border-radius:10px!important; padding:11px 14px!important; font-size:0.95rem; color:#334155; background-color:#f8fafc!important; transition:all 0.2s ease; }
+.form-card .form-control:focus, .form-card .form-select:focus { border-color:#8f94fb!important; background-color:#fff!important; box-shadow:0 0 0 3.5px rgba(143,148,251,0.20)!important; }
+.form-card .form-check.form-switch { background:#f1f5f9; border-radius:12px; padding:14px 20px; border:1.5px solid #e2e8f0; display:flex; align-items:center; gap:10px; }
+.form-card .form-check-input { width:2.5em; height:1.4em; cursor:pointer; }
+.form-card .form-check-input:checked { background-color:#4e54c8; border-color:#4e54c8; }
+.form-card .form-check-label { font-size:0.95rem; color:#475569; font-weight:500; cursor:pointer; }
+.form-card .field-error { font-size:0.82rem; color:#ef4444; margin-top:5px; display:flex; align-items:center; gap:4px; }
+.btn-guardar { background:linear-gradient(135deg,#4e54c8,#8f94fb)!important; border:none!important; border-radius:10px!important; color:white!important; font-weight:600; padding:12px 20px; transition:all 0.2s ease; box-shadow:0 4px 12px rgba(78,84,200,0.25); }
+.btn-guardar:hover { background:linear-gradient(135deg,#3f44af,#7c81df)!important; transform:translateY(-1px); box-shadow:0 6px 16px rgba(78,84,200,0.35); color:white!important; }
+.btn-cancelar { background:#f1f5f9!important; border:1.5px solid #e2e8f0!important; border-radius:10px!important; color:#475569!important; font-weight:600; padding:12px 20px; transition:all 0.2s ease; text-decoration:none; display:inline-block; }
+.btn-cancelar:hover { background:#e2e8f0!important; color:#334155!important; transform:translateY(-1px); }
+</style>
+
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white"><h4>{{ title }}</h4></div>
+    <div class="card form-card">
+      <div class="card-header">
+        <h5><i class="bi bi-tag me-2"></i>{{ title }}</h5>
+      </div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
-          {% for field in form %}
-          <div class="mb-3">
-            <label class="form-label">{{ field.label }}</label>
-            {{ field }}
-            {% for error in field.errors %}
-            <div class="text-danger">{{ error }}</div>
+          <div class="row">
+            {% for field in form %}
+              {% if field.name == 'is_active' %}
+              <div class="col-12 mb-3">
+                <div class="form-check form-switch">
+                  {{ field }}
+                  <label class="form-check-label" for="{{ field.id_for_label }}">Marca Activa</label>
+                </div>
+                {% if field.errors %}<div class="field-error"><i class="bi bi-exclamation-circle"></i>{{ field.errors|join:", " }}</div>{% endif %}
+              </div>
+              {% else %}
+              <div class="col-12 mb-3">
+                <label class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div class="field-error"><i class="bi bi-exclamation-circle"></i>{{ field.errors|join:", " }}</div>{% endif %}
+              </div>
+              {% endif %}
             {% endfor %}
           </div>
-          {% endfor %}
-          <button type="submit" class="btn btn-primary">Registrar</button>
-          <a href="{% url 'billing:brand_list' %}" class="btn btn-secondary">Cancelar</a>
+          <div class="d-flex gap-3 mt-2">
+            <button type="submit" class="btn btn-guardar w-100">
+              <i class="bi bi-check-circle me-1"></i>Guardar
+            </button>
+            <a href="{% url 'billing:brand_list' %}" class="btn btn-cancelar w-100">
+              <i class="bi bi-x-circle me-1"></i>Cancelar
+            </a>
+          </div>
         </form>
       </div>
     </div>
   </div>
 </div>
+
 {% endblock %}

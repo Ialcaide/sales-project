@@ -183,9 +183,107 @@ class GroupDeleteView(AdminOnlyMixin, DeleteView):
     success_url = reverse_lazy('security:group_list')
 
 
+MODEL_TRANSLATIONS = {
+    'brand': 'marca',
+    'product group': 'grupo de productos',
+    'productgroup': 'grupo de productos',
+    'supplier': 'proveedor',
+    'product': 'producto',
+    'customer': 'cliente',
+    'invoice': 'factura',
+    'purchase': 'compra',
+    'user': 'usuario',
+    'group': 'rol / grupo',
+    'permission': 'permiso',
+    'content type': 'tipo de contenido',
+    'session': 'sesión',
+    'log entry': 'registro de auditoría',
+    'logentry': 'registro de auditoría',
+    'customerprofile': 'perfil de cliente',
+    'invoicedetail': 'detalle de factura',
+    'purchasedetail': 'detalle de compra',
+}
+
+def translate_permission_name(name):
+    if not name:
+        return name
+    parts = name.split(' ')
+    if len(parts) >= 3 and parts[0] == 'Can':
+        action = parts[1]
+        model_name = ' '.join(parts[2:])
+        
+        action_es = action
+        if action == 'add':
+            action_es = 'Puede agregar'
+        elif action == 'change':
+            action_es = 'Puede modificar'
+        elif action == 'delete':
+            action_es = 'Puede eliminar'
+        elif action == 'view':
+            action_es = 'Puede ver'
+            
+        model_es = MODEL_TRANSLATIONS.get(model_name.lower(), model_name)
+        return f'{action_es} {model_es.lower()}'
+    return name
+
+
 # === PERMISOS ===
 @admin_required
 def permission_list(request):
+    groups = Group.objects.all()
+    users = User.objects.filter(is_active=True)
+
+    if request.method == 'POST':
+        permission_ids = request.POST.getlist('permission_ids')
+        group_ids = request.POST.getlist('group_ids')
+        user_ids = request.POST.getlist('user_ids')
+
+        # Update groups
+        for g_id in group_ids:
+            try:
+                group = Group.objects.get(id=g_id)
+                assigned_perms = set(group.permissions.filter(id__in=permission_ids).values_list('id', flat=True))
+                
+                submitted_perms = set()
+                for p_id in permission_ids:
+                    if f'role_{g_id}_{p_id}' in request.POST:
+                        submitted_perms.add(int(p_id))
+                
+                perms_to_add = submitted_perms - assigned_perms
+                if perms_to_add:
+                    group.permissions.add(*perms_to_add)
+                
+                perms_to_remove = assigned_perms - submitted_perms
+                if perms_to_remove:
+                    group.permissions.remove(*perms_to_remove)
+            except Group.DoesNotExist:
+                pass
+
+        # Update users
+        for u_id in user_ids:
+            try:
+                user = User.objects.get(id=u_id)
+                assigned_perms = set(user.user_permissions.filter(id__in=permission_ids).values_list('id', flat=True))
+                
+                submitted_perms = set()
+                for p_id in permission_ids:
+                    if f'user_{u_id}_{p_id}' in request.POST:
+                        submitted_perms.add(int(p_id))
+                
+                perms_to_add = submitted_perms - assigned_perms
+                if perms_to_add:
+                    user.user_permissions.add(*perms_to_add)
+                
+                perms_to_remove = assigned_perms - submitted_perms
+                if perms_to_remove:
+                    user.user_permissions.remove(*perms_to_remove)
+            except User.DoesNotExist:
+                pass
+
+        from django.contrib import messages
+        messages.success(request, 'Asignaciones de permisos guardadas correctamente.')
+        return redirect(request.get_full_path())
+
     query = request.GET.get('q', '')
     export = request.GET.get('export', '')
 
@@ -212,13 +310,40 @@ def permission_list(request):
         else:
             return exporter.export_to_excel(items)
 
-    paginator = Paginator(items, 15)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    page_obj = list(items)
+
+    # Optimización: Obtener relaciones de permisos para grupos y usuarios en una sola consulta
+    group_perms_dict = {}
+    for group_id, permission_id in Group.permissions.through.objects.values_list('group_id', 'permission_id'):
+        if group_id not in group_perms_dict:
+            group_perms_dict[group_id] = set()
+        group_perms_dict[group_id].add(permission_id)
+
+    user_perms_dict = {}
+    for user_id, permission_id in User.user_permissions.through.objects.values_list('user_id', 'permission_id'):
+        if user_id not in user_perms_dict:
+            user_perms_dict[user_id] = set()
+        user_perms_dict[user_id].add(permission_id)
+
+    # Anotar cada permiso en la página actual, traducir nombre y modelo
+    for p in page_obj:
+        p.translated_name = translate_permission_name(p.name)
+        p.translated_model = MODEL_TRANSLATIONS.get(p.content_type.model.lower(), p.content_type.model)
+        p.assigned_groups = []
+        for g in groups:
+            if p.id in group_perms_dict.get(g.id, set()):
+                p.assigned_groups.append(g.id)
+        
+        p.assigned_users = []
+        for u in users:
+            if p.id in user_perms_dict.get(u.id, set()):
+                p.assigned_users.append(u.id)
 
     context = {
         'page_obj': page_obj,
         'query': query,
+        'groups': groups,
+        'users': users,
     }
     return render(request, 'security/permission_list.html', context)
 
@@ -241,3 +366,20 @@ class PermissionDeleteView(AdminOnlyMixin, DeleteView):
     model = Permission
     template_name = 'security/confirm_delete.html'
     success_url = reverse_lazy('security:permission_list')
+
+
+@admin_required
+def security_dashboard(request):
+    total_users = User.objects.count()
+    total_groups = Group.objects.count()
+    total_permissions = Permission.objects.count()
+
+    recent_users = User.objects.prefetch_related('groups').order_by('-id')[:5]
+
+    context = {
+        'total_users': total_users,
+        'total_groups': total_groups,
+        'total_permissions': total_permissions,
+        'recent_users': recent_users,
+    }
+    return render(request, 'security/dashboard.html', context)

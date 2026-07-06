@@ -39,16 +39,10 @@
           {% endif %}
 
           {% if user|has_group:'Administrador' %}
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'security:dashboard' %}">
               <i class="bi bi-shield-lock me-1"></i>Seguridad
             </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{% url 'security:register' %}"><i class="bi bi-person-plus me-1"></i>Registrarse</a></li>
-              <li><a class="dropdown-item" href="{% url 'security:user_list' %}"><i class="bi bi-person-gear me-1"></i>Usuarios</a></li>
-              <li><a class="dropdown-item" href="{% url 'security:group_list' %}"><i class="bi bi-diagram-3 me-1"></i>Roles</a></li>
-              <li><a class="dropdown-item" href="{% url 'security:permission_list' %}"><i class="bi bi-key me-1"></i>Permisos</a></li>
-            </ul>
           </li>
           {% endif %}
 

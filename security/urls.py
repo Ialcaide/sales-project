@@ -4,6 +4,7 @@ from . import views
 app_name = 'security'
 
 urlpatterns = [
+    path('', views.security_dashboard, name='dashboard'),
     path('register/', views.RegisterView.as_view(), name='register'),
     path('login/', views.SecurityLoginView.as_view(), name='login'),
     path('logout/', views.SecurityLogoutView.as_view(), name='logout'),

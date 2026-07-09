@@ -5,6 +5,7 @@ from billing.models import Product
 
 
 class PurchaseForm(forms.ModelForm):
+    """Cabecera: solo proveedor y número de documento. Las líneas van en el formset de abajo."""
     class Meta:
         model = Purchase
         fields = ['supplier', 'document_number']
@@ -14,6 +15,12 @@ class PurchaseForm(forms.ModelForm):
         }
 
 
+# product/quantity/unit_cost se declaran a mano (en vez de dejar que
+# ModelForm los infiera solos) para poder poner required=False: así, si el
+# usuario deja una fila del formset completamente vacía (no agregó ese
+# producto), no truena con "este campo es obligatorio" — simplemente esa fila
+# se ignora al guardar (ver purchasing/views.py, donde se filtran las filas
+# sin producto antes de procesar).
 class PurchaseDetailForm(forms.ModelForm):
     product = forms.ModelChoiceField(
         queryset=Product.objects.filter(is_active=True),
@@ -40,8 +47,8 @@ PurchaseDetailFormSet = inlineformset_factory(
     Purchase,
     PurchaseDetail,
     form=PurchaseDetailForm,
-    extra=1,
-    can_delete=True,
+    extra=1,           # 1 fila vacía al abrir el formulario (el JS agrega más en vivo)
+    can_delete=True,   # agrega la casilla "Eliminar" a cada fila
     validate_min=False,
-    min_num=0,
+    min_num=0,         # no exige un mínimo de filas acá (la vista valida "al menos 1 producto" a mano)
 )

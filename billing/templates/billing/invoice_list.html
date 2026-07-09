@@ -62,6 +62,7 @@
   <thead class="table-dark">
     <tr>
       <th>#</th>
+      <th>N° Factura</th>
       <th>Cliente</th>
       <th>Fecha</th>
       <th class="text-end">Subtotal</th>
@@ -73,7 +74,8 @@
   <tbody>
     {% for inv in page_obj %}
     <tr>
-      <td>{{ inv.id }}</td>
+      <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+      <td>#{{ inv.id|stringformat:"04d" }}</td>
       <td>{{ inv.customer }}</td>
       <td>{{ inv.invoice_date|date:"d/m/Y H:i" }}</td>
       <td class="text-end">${{ inv.subtotal }}</td>
@@ -81,41 +83,20 @@
       <td class="text-end fw-bold">${{ inv.total }}</td>
       <td>
         <a href="{% url 'billing:invoice_detail' inv.pk %}" class="btn btn-sm btn-info">Ver</a>
+        <a href="{% url 'billing:invoice_pdf' inv.pk %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF" target="_blank">
+          <i class="bi bi-printer"></i>
+        </a>
         {% if user|has_group:'Administrador' or user.is_superuser %}
           <a href="{% url 'billing:invoice_delete' inv.pk %}" class="btn btn-sm btn-danger">Borrar</a>
         {% endif %}
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="7" class="text-center">No hay facturas registradas</td></tr>
+    <tr><td colspan="8" class="text-center">No hay facturas registradas</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
-{% if page_obj.has_other_pages %}
-<nav class="d-flex justify-content-center mt-3">
-  <ul class="pagination">
-    {% if page_obj.has_previous %}
-      <li class="page-item">
-        <a class="page-link" href="?page=1&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&min_total={{ min_total }}&max_total={{ max_total }}">&laquo; Primera</a>
-      </li>
-      <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&min_total={{ min_total }}&max_total={{ max_total }}">Anterior</a>
-      </li>
-    {% endif %}
-    <li class="page-item active">
-      <span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-    </li>
-    {% if page_obj.has_next %}
-      <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&min_total={{ min_total }}&max_total={{ max_total }}">Siguiente</a>
-      </li>
-      <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ query }}&date_from={{ date_from }}&date_to={{ date_to }}&min_total={{ min_total }}&max_total={{ max_total }}">Última &raquo;</a>
-      </li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% include 'partials/pagination.html' %}
 
 {% endblock %}

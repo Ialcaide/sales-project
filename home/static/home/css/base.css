@@ -449,3 +449,46 @@ footer {
 .active-box .form-check-input:checked { background-color: #6366f1; border-color: #6366f1; }
 .active-box-text strong { font-size: 0.95rem; font-weight: 600; color: #4338ca; display: block; }
 .active-box-text span   { font-size: 0.82rem; color: #7c3aed; }
+
+/* Paginación */
+.pagination-modern {
+  gap: 6px;
+}
+.pagination-modern .page-item .page-link {
+  border: none !important;
+  border-radius: 10px !important;
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4e54c8;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background-color: #f8fafc;
+  box-shadow: none !important;
+  transition: all 0.18s ease;
+}
+.pagination-modern .page-item .page-link:hover {
+  background: #eef2ff;
+  color: #3f44af;
+  transform: translateY(-1px);
+}
+.pagination-modern .page-item.active .page-link {
+  background: linear-gradient(135deg, #4e54c8, #8f94fb) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(78, 84, 200, 0.35) !important;
+}
+.pagination-modern .page-item.disabled .page-link {
+  background: transparent;
+  color: #cbd5e1;
+  cursor: default;
+}
+.pagination-modern .page-item .page-link.page-ellipsis {
+  background: transparent;
+  box-shadow: none;
+}
+.pagination-summary {
+  margin-top: 10px;
+  font-size: 0.82rem;
+}

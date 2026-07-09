@@ -1,11 +1,24 @@
-#viene de formulario- son el contenedor de los controles el archivo que conetnera todos los input, selecet de mi pagina html y label 
-# ¿por que se hace en python y no en html? se integra con la clase modelo que tenemos, atributos html van aca
+# Los Form/ModelForm son el puente entre el HTML (inputs, selects, labels) y
+# los modelos de Python: definen qué campos se piden, cómo se validan, y con
+# qué clase CSS se renderiza cada input (los 'widgets' de abajo).
+#
+# ModelForm (la mayoría de las clases de este archivo) genera el formulario
+# automáticamente a partir de un modelo (Meta.model + Meta.fields) — no hay
+# que declarar cada campo a mano, Django los infiere del modelo. Solo se
+# declaran a mano los campos que necesitan algo especial (validación extra,
+# widget distinto, o que no son parte del modelo, como 'password1'/'password2').
 
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from .models import Brand
 
+# NOTA: este formulario (y su vista SignUpView en views.py) es un flujo de
+# auto-registro público que quedó de una versión anterior del proyecto y
+# hoy no está enlazado desde ningún lugar de la interfaz — el alta de
+# usuarios ahora la hace un administrador desde security/ (ver
+# security.forms.UserRegisterForm). Se deja documentado para que no genere
+# confusión si lo encuentras, pero no es el flujo real que usa el sistema.
 class SignUpForm(UserCreationForm):
     email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={'class':'form-control'}))
     first_name = forms.CharField(max_length=100, widget=forms.TextInput(attrs={'class':'form-control'}))
@@ -27,6 +40,9 @@ class BrandForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class':'form-check-input'}),
         }
         
+    # clean_<campo>: validación de UN campo específico. Django la corre sola
+    # al llamar form.is_valid(), y el error queda ligado a ese campo (se
+    # muestra justo debajo de él, no en el formulario entero).
     def clean_name(self):
         name = self.cleaned_data.get('name')
         if not name or not name.strip():
@@ -37,6 +53,7 @@ from django.forms import inlineformset_factory
 from .models import Invoice, InvoiceDetail
 
 class InvoiceForm(forms.ModelForm):
+    """Solo pide el cliente — los productos de la factura los maneja el formset de abajo."""
     class Meta:
         model = Invoice
         fields = ['customer']
@@ -44,6 +61,14 @@ class InvoiceForm(forms.ModelForm):
             'customer': forms.Select(attrs={'class': 'form-select'}),
         }
 
+# Un formset es "varios formularios del mismo tipo, repetidos" — acá, varias
+# líneas de InvoiceDetail (producto + cantidad + precio) dentro de UNA sola
+# factura. inlineformset_factory ata cada línea automáticamente a su Invoice
+# padre (por la ForeignKey invoice -> InvoiceDetail.invoice).
+#   extra=1        -> muestra 1 línea vacía además de las que ya existan
+#   can_delete=True -> agrega una casilla "Eliminar" por línea
+# En el template, JavaScript agrega más líneas en vivo (ver invoice_form.html),
+# clonando esta misma estructura con un índice distinto (form-0, form-1, ...).
 InvoiceDetailFormSet = inlineformset_factory(
     Invoice,
     InvoiceDetail,

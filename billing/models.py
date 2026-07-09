@@ -1,6 +1,17 @@
 from django.db import models
 from shared.validators import validate_cedula_ec
 
+# Cada clase de este archivo = una tabla en la base de datos (Django genera
+# el SQL solo). Al agregar o cambiar un modelo, SIEMPRE hay que correr:
+#   python manage.py makemigrations billing
+#   python manage.py migrate
+# para que el cambio se refleje en dbventas.sqlite3.
+#
+# on_delete=PROTECT (lo vas a ver en varias FK de este archivo) significa:
+# "no dejes borrar este registro si todavía hay otro que depende de él" —
+# ej. no se puede borrar una Marca si tiene Productos asociados.
+
+
 class Brand(models.Model):
     """Marcas de productos."""
     name = models.CharField(max_length=100, unique=True, verbose_name='Nombre')
@@ -49,6 +60,10 @@ class Supplier(models.Model):
 
 class Product(models.Model):
     """Productos. FK a Brand/Group, M2M a Supplier."""
+    # ManyToManyField (más abajo, 'suppliers') es distinto de ForeignKey:
+    # un producto puede tener VARIOS proveedores, y un proveedor puede
+    # vender VARIOS productos. Django crea una tabla intermedia solo para
+    # guardar esa relación (no hace falta modelarla a mano).
     name = models.CharField(max_length=200, verbose_name='Nombre')
     description = models.TextField(blank=True, null=True, verbose_name='Descripción')
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name='products', verbose_name='Marca')
@@ -67,13 +82,24 @@ class Product(models.Model):
         verbose_name_plural = 'Productos'
         ordering = ['name']
 
+    # @property convierte un método en algo que se lee como si fuera un
+    # campo más: product.inventory_value, SIN paréntesis. Estos valores NO
+    # se guardan en la base de datos, se calculan al vuelo cada vez que se
+    # piden (por eso no aparecen en las migraciones).
     @property
     def inventory_value(self):
         return self.stock * self.unit_price
 
     @property
     def placeholder_image(self):
-        """Imagen generada automáticamente (SVG) para productos sin foto."""
+        """
+        Genera una imagen SVG "al vuelo" (sin guardar ningún archivo en disco)
+        para productos que no tienen foto subida: un cuadrado de color con la
+        inicial del nombre. El color sale de un hash del nombre, así el MISMO
+        producto siempre recibe el MISMO color (no cambia en cada visita).
+        Se devuelve como "data URI" (data:image/svg+xml;...) — un <img src="...">
+        puede usar esto directamente, como si fuera la URL de un archivo real.
+        """
         import hashlib
         from urllib.parse import quote
         palette = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777']
@@ -90,7 +116,12 @@ class Product(models.Model):
         return f'data:image/svg+xml;utf8,{quote(svg)}'
 
     def __str__(self): return f'{self.name} ({self.brand.name})'
-    
+
+    # clean() es la validación a nivel de MODELO (corre siempre que se llama
+    # full_clean(), y Django la llama automáticamente al validar un ModelForm).
+    # Es la última línea de defensa: aunque alguien intente crear un Product
+    # sin pasar por el formulario (ej. desde el shell o un script), estas
+    # reglas se siguen aplicando.
     def clean(self):
         from django.core.exceptions import ValidationError
         if self.unit_price is not None and self.unit_price <= 0:
@@ -126,7 +157,12 @@ class Customer(models.Model):
             raise ValidationError({'last_name': 'El apellido es obligatorio.'})
 
 class CustomerProfile(models.Model):
-    """Perfil extendido. OneToOne con Customer."""
+    """
+    Perfil extendido. OneToOne con Customer: en vez de agregar estos campos
+    directamente a Customer, se separan en una tabla aparte porque son datos
+    "opcionales/avanzados" (facturación) que no todos los clientes necesitan
+    llenar de una — mismo patrón que UserProfile en security/models.py.
+    """
     TAXPAYER = [('final', 'Consumidor Final'), ('ruc', 'RUC'), ('rise', 'RISE')]
     PAYMENT = [('cash', 'Contado'), ('credit_15', '15 días'), ('credit_30', '30 días'), ('credit_60', '60 días')]
     customer = models.OneToOneField(Customer, on_delete=models.CASCADE, related_name='profile', verbose_name='Cliente')
@@ -154,13 +190,25 @@ class Invoice(models.Model):
     def __str__(self): return f'Factura #{self.id} - {self.customer}'
 
 class InvoiceDetail(models.Model):
-    """Líneas de factura."""
+    """
+    Líneas de factura (una por cada producto vendido en esa factura).
+    related_name='details' es lo que permite escribir invoice.details.all()
+    desde una Invoice para obtener todas sus líneas (se usa mucho en
+    billing/views.py e billing/templates/billing/invoice_detail.html).
+    on_delete=CASCADE en 'invoice' (a diferencia de PROTECT en 'product'):
+    si se borra la factura, sus líneas se borran con ella; pero no se puede
+    borrar un producto que ya fue facturado alguna vez.
+    """
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='details', verbose_name='Factura')
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='invoice_details', verbose_name='Producto')
     quantity = models.IntegerField(default=1, verbose_name='Cantidad')
     unit_price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name='Precio unitario')
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name='Subtotal')
     def __str__(self): return f'{self.product.name} x {self.quantity}'
+
+    # save() sobreescrito: cada vez que se guarda una línea, se recalcula el
+    # subtotal automáticamente ANTES de escribir en la base de datos — así
+    # nunca puede quedar desincronizado con quantity/unit_price.
     def save(self, *args, **kwargs):
         self.subtotal = self.quantity * self.unit_price
         super().save(*args, **kwargs)

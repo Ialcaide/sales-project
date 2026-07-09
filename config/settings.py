@@ -46,6 +46,12 @@ CSRF_TRUSTED_ORIGINS = [
 # APLICACIONES
 # =====================================================
 
+# Las primeras 6 son apps que YA trae Django (autenticación, sesiones,
+# mensajes flash, panel /admin/, etc.) — sin 'django.contrib.auth' no
+# existiría ni siquiera el modelo User que usa todo security/. Las nuestras
+# (billing, purchasing, security, home) van después. Si creas una app nueva
+# con `python manage.py startapp mi_app`, hay que agregarla acá para que
+# Django la reconozca (sus modelos, templates, management commands, etc.).
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -59,16 +65,21 @@ INSTALLED_APPS = [
     'security',
     'home',
 
-    'django_extensions',
+    'django_extensions',  # habilita "manage.py shell_plus"
 ]
 
 # =====================================================
 # MIDDLEWARE
 # =====================================================
 
+# El middleware es una "cadena" por la que pasa CADA request antes de llegar
+# a la vista, y CADA response antes de salir al navegador — en el orden en
+# que están listados acá (de arriba hacia abajo en el request, al revés en
+# el response). Ej: AuthenticationMiddleware es lo que hace que
+# request.user exista en cualquier vista.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # sirve archivos estáticos en producción, sin necesitar nginx
 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

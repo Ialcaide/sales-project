@@ -1,0 +1,51 @@
+{% extends 'billing/base.html' %}
+{% block title %}{{ role.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow border-0">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">Detalle del rol</h4>
+      </div>
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <p class="text-muted small mb-1">Nombre del rol</p>
+          <p class="fw-bold fs-5">{{ role.name }}</p>
+        </div>
+        <hr>
+        <h5 class="mb-3">Usuarios con este rol ({{ role_users|length }})</h5>
+        <div class="mb-3">
+          {% for u in role_users %}
+            <span class="badge bg-info me-1">{{ u.username }}</span>
+          {% empty %}
+            <span class="text-muted">Ningún usuario tiene este rol todavía.</span>
+          {% endfor %}
+        </div>
+        <hr>
+        <h5 class="mb-3">Permisos asignados ({{ role_permissions|length }})</h5>
+        <table class="table table-sm table-hover">
+          <thead class="table-dark">
+            <tr><th>Permiso</th><th>Módulo</th></tr>
+          </thead>
+          <tbody>
+            {% for p in role_permissions %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td>{{ p.model|title }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-center text-muted">Sin permisos asignados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <a href="{% url 'security:group_list' %}" class="btn btn-outline-secondary">Volver</a>
+        <a href="{% url 'security:group_update' role.pk %}" class="btn btn-warning">Editar</a>
+        <a href="{% url 'security:group_delete' role.pk %}" class="btn btn-danger">Borrar</a>
+        <a href="{% url 'security:permission_list' %}?target_type=group&target_id={{ role.pk }}" class="btn btn-primary ms-auto">Gestionar permisos</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

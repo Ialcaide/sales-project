@@ -1,15 +1,22 @@
 from django.urls import path
 from . import views
+
+# app_name = 'billing' habilita el namespace: {% url 'billing:product_list' %},
+# 'billing:invoice_create', etc.
 app_name = 'billing'
+
 urlpatterns = [
-    path('signup/', views.SignUpView.as_view(), name='signup'),
-    # Brand (FBV)
+    path('signup/', views.SignUpView.as_view(), name='signup'),  # ver nota en views.py: sin usar
+
+    # --- Brand (FBV: create/update/delete son funciones, no clases) ---
     path('brands/', views.brand_list, name='brand_list'),
     path('brands/create/', views.brand_create, name='brand_create'),
+    path('brands/<int:pk>/', views.brand_detail, name='brand_detail'),
     path('brands/<int:pk>/edit/', views.brand_update, name='brand_update'),
     path('brands/<int:pk>/delete/', views.brand_delete, name='brand_delete'),
     path('groups/', views.productgroup_list, name='productgroup_list'),
     path('groups/create/', views.ProductGroupCreateView.as_view(), name='productgroup_create'),
+    path('groups/<int:pk>/', views.ProductGroupDetailView.as_view(), name='productgroup_detail'),
     path('groups/<int:pk>/edit/', views.ProductGroupUpdateView.as_view(), name='productgroup_update'),
     path('groups/<int:pk>/delete/', views.ProductGroupDeleteView.as_view(), name='productgroup_delete'),
     path('suppliers/', views.supplier_list, name='supplier_list'),
@@ -31,7 +38,11 @@ urlpatterns = [
     path('invoices/create/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:pk>/', views.invoice_detail, name='invoice_detail'),
     path('invoices/<int:pk>/delete/', views.invoice_delete, name='invoice_delete'),
+    # OJO: esta ruta '' está "tapada" por home.urls (config/urls.py incluye
+    # home.urls ANTES que billing.urls, y ambas registran '' con name='home').
+    # Django usa la primera que matchea, así que la raíz del sitio siempre
+    # cae en home.views.home, nunca en esta. Queda como referencia de que
+    # dos apps no deberían registrar la misma URL sin querer.
     path('', views.home, name='home'),
     path('invoices/<int:pk>/pdf/', views.invoice_pdf, name='invoice_pdf'),
-    
 ]

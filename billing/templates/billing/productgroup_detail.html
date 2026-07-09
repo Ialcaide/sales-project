@@ -1,0 +1,68 @@
+{% extends 'billing/base.html' %}
+{% block title %}{{ group.name }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow border-0">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Detalle del grupo de producto</h4>
+        {% if group.is_active %}
+          <span class="badge bg-success">Activo</span>
+        {% else %}
+          <span class="badge bg-danger">Inactivo</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <p class="text-muted small mb-1">Nombre</p>
+          <p class="fw-bold fs-5">{{ group.name }}</p>
+        </div>
+        <hr>
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Fecha de creación</p>
+            <p>{{ group.created_at|date:"d/m/Y H:i" }}</p>
+          </div>
+          <div class="col-md-6">
+            <p class="text-muted small mb-1">Última actualización</p>
+            <p>{{ group.updated_at|date:"d/m/Y H:i" }}</p>
+          </div>
+        </div>
+        <hr>
+        <h5 class="mb-3">Productos de este grupo</h5>
+        <table class="table table-sm table-hover">
+          <thead class="table-dark">
+            <tr>
+              <th>Nombre</th>
+              <th>Marca</th>
+              <th class="text-end">Precio</th>
+              <th class="text-center">Stock</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in group.products.all %}
+            <tr>
+              <td>{{ p.name }}</td>
+              <td>{{ p.brand.name }}</td>
+              <td class="text-end">${{ p.unit_price }}</td>
+              <td class="text-center">{{ p.stock }}</td>
+              <td>
+                <a href="{% url 'billing:product_detail' p.pk %}" class="btn btn-sm btn-info">Ver</a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">Sin productos asociados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <a href="{% url 'billing:productgroup_list' %}" class="btn btn-outline-secondary">Volver</a>
+        <a href="{% url 'billing:productgroup_update' group.pk %}" class="btn btn-warning">Editar</a>
+        <a href="{% url 'billing:productgroup_delete' group.pk %}" class="btn btn-danger">Borrar</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

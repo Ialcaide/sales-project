@@ -4,7 +4,11 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Compras</h2>
-  <a href="{% url 'purchasing:purchase_create' %}" class="btn btn-primary">+ Nueva Compra</a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'purchasing:purchase_create' %}" class="btn btn-primary">+ Nueva Compra</a>
+    <button type="submit" form="filtros-form" name="export" value="pdf" class="btn btn-danger">PDF</button>
+    <button type="submit" form="filtros-form" name="export" value="excel" class="btn btn-success">Excel</button>
+  </div>
 </div>
 
 <div class="card mb-3">
@@ -58,6 +62,7 @@
   <thead class="table-dark">
     <tr>
       <th>#</th>
+      <th>N° Compra</th>
       <th>Proveedor</th>
       <th>N° Documento</th>
       <th>Fecha</th>
@@ -70,7 +75,8 @@
   <tbody>
     {% for item in items %}
     <tr>
-      <td>{{ item.id }}</td>
+      <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+      <td>#{{ item.id|stringformat:"04d" }}</td>
       <td>{{ item.supplier.name }}</td>
       <td>{{ item.document_number }}</td>
       <td>{{ item.purchase_date|date:"d/m/Y H:i" }}</td>
@@ -79,13 +85,18 @@
       <td class="text-end fw-bold">${{ item.total }}</td>
       <td>
         <a href="{% url 'purchasing:purchase_detail' item.pk %}" class="btn btn-sm btn-info">Ver</a>
+        <a href="{% url 'purchasing:purchase_pdf' item.pk %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF" target="_blank">
+          <i class="bi bi-printer"></i>
+        </a>
         <a href="{% url 'purchasing:purchase_delete' item.pk %}" class="btn btn-sm btn-danger">Borrar</a>
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="8" class="text-center">No hay compras registradas</td></tr>
+    <tr><td colspan="9" class="text-center">No hay compras registradas</td></tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% include 'partials/pagination.html' %}
 
 {% endblock %}

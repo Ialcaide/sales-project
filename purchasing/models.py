@@ -1,9 +1,13 @@
 from django.db import models
 from decimal import Decimal
+# purchasing reutiliza modelos de billing en vez de duplicarlos: una compra
+# le compra Product a un Supplier, ambos ya definidos en billing/models.py.
+# Así, cuando se registra una compra, se puede actualizar directamente el
+# stock/last_cost del Product real (ver purchasing/views.py -> purchase_create).
 from billing.models import Supplier, Product
 
 class Purchase(models.Model):
-    """Cabecera de compra."""
+    """Cabecera de compra (una por cada factura de compra que llega de un proveedor)."""
     supplier = models.ForeignKey(
         Supplier, on_delete=models.PROTECT, related_name='purchases'
     )
@@ -20,6 +24,9 @@ class Purchase(models.Model):
         verbose_name = 'Purchase'
         verbose_name_plural = 'Purchases'
         ordering = ['-purchase_date']
+        # No se puede registrar dos veces la MISMA factura del MISMO
+        # proveedor (evita cargar el mismo documento de compra por error).
+        # Sí se permite repetir el document_number entre proveedores distintos.
         constraints = [
         models.UniqueConstraint(
             fields=['supplier', 'document_number'],
@@ -35,7 +42,12 @@ class Purchase(models.Model):
 
 
 class PurchaseDetail(models.Model):
-    """Líneas de compra."""
+    """
+    Líneas de compra (un producto comprado, con su cantidad y costo).
+    Se llama 'unit_cost' (no 'unit_price' como en InvoiceDetail) porque acá
+    representa lo que la empresa PAGA al proveedor, no lo que le cobra al
+    cliente — son conceptos distintos aunque la estructura sea idéntica.
+    """
     purchase = models.ForeignKey(
         Purchase, on_delete=models.CASCADE, related_name='details'
     )

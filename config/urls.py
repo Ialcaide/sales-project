@@ -19,15 +19,26 @@ from django.urls import path, re_path, include
 from django.conf import settings
 from django.views.static import serve as static_serve
 
+# Este es el "urls.py raíz": el ÚNICO archivo que Django lee primero para
+# cualquier request (ROOT_URLCONF en settings.py apunta acá). Cada
+# include(...) delega el resto de la URL al urls.py de esa app — ej. una
+# petición a /products/create/ entra acá, ve que no matchea nada de arriba,
+# cae en include('billing.urls') (prefijo '' = billing entero vive en la
+# raíz), y billing/urls.py resuelve 'products/create/' con su propia lista.
+#
+# ORDEN IMPORTA: Django prueba cada path() de arriba hacia abajo y se queda
+# con el PRIMERO que matchea. Por eso 'home.urls' va antes que 'billing.urls'
+# (ambas registran '' — ver la nota en billing/urls.py sobre la ruta muerta).
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('accounts/', include('django.contrib.auth.urls')),
-    path('security/', include('security.urls')),
-    path('purchases/', include('purchasing.urls')),
-    path('', include('home.urls')),   # home primero
-    path('', include('billing.urls')),
-    # django.conf.urls.static.static() solo sirve MEDIA cuando DEBUG=True;
-    # se sirve explícito aquí para que las imágenes de producto también
-    # funcionen en producción (Render).
+    path('admin/', admin.site.urls),                            # panel nativo de Django
+    path('accounts/', include('django.contrib.auth.urls')),      # login/logout/reset que trae Django de fábrica
+    path('security/', include('security.urls')),                 # /security/... usuarios, roles, permisos
+    path('purchases/', include('purchasing.urls')),               # /purchases/... compras
+    path('', include('home.urls')),                                # / -> dashboard (debe ir ANTES que billing.urls)
+    path('', include('billing.urls')),                             # /products/, /customers/, /invoices/, etc.
+    # django.conf.urls.static.static() (el helper "de manual" de Django)
+    # solo sirve MEDIA_ROOT cuando DEBUG=True; acá se sirve explícito y sin
+    # esa condición para que las imágenes de producto también se vean en
+    # producción (Render), donde DEBUG está en False.
     re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
 ]

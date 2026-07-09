@@ -1,0 +1,53 @@
+{% extends 'billing/base.html' %}
+{% block title %}Mi Perfil{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+
+    <div class="card shadow mb-4">
+      <div class="card-header bg-primary text-white"><h4 class="mb-0">Mis Datos</h4></div>
+      <div class="card-body">
+        <p class="text-muted small">Usuario: <strong>{{ user.username }}</strong> (no se puede cambiar)</p>
+        <form method="post">
+          {% csrf_token %}
+          {{ form.as_p }}
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white"><h4 class="mb-0">Cambiar Contraseña</h4></div>
+      <div class="card-body">
+        {% if not pending_code %}
+          <p class="text-muted">
+            Para cambiar tu contraseña primero te enviaremos un código de verificación a tu correo
+            (<strong>{{ user.email }}</strong>).
+          </p>
+          <form method="post" action="{% url 'security:password_change_request' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning">
+              <i class="bi bi-envelope me-1"></i>Enviar código a mi correo
+            </button>
+          </form>
+        {% else %}
+          <p class="text-muted">
+            Te enviamos un código de 6 dígitos a <strong>{{ user.email }}</strong>. Ingrésalo junto con tu
+            nueva contraseña (vence en 10 minutos).
+          </p>
+          <form method="post" action="{% url 'security:password_change_confirm' %}">
+            {% csrf_token %}
+            {{ password_form.as_p }}
+            <button type="submit" class="btn btn-primary">Confirmar cambio</button>
+          </form>
+          <form method="post" action="{% url 'security:password_change_request' %}" class="mt-2">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-link btn-sm p-0">¿No te llegó? Reenviar código</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

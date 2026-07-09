@@ -1,59 +1,129 @@
 {% extends 'billing/base.html' %}
+{% load static %}
 {% block title %}Compra #{{ purchase.id }}{% endblock %}
 {% block content %}
+<style>
+.factura-wrapper { background:#fff; border-radius:20px; box-shadow:0 4px 40px rgba(78,84,200,0.10); padding:48px; max-width:860px; margin:0 auto; }
+.factura-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; padding-bottom:24px; border-bottom:2px solid #f1f5f9; }
+.factura-empresa h2 { font-size:1.6rem; font-weight:800; color:#4e54c8; margin:0; }
+.factura-empresa p { font-size:0.85rem; color:#94a3b8; margin:0; }
+.factura-numero { text-align:right; }
+.factura-numero .num { font-size:1.8rem; font-weight:800; color:#4e54c8; }
+.factura-numero .fecha { font-size:0.85rem; color:#94a3b8; }
+.factura-info { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
+.info-box { background:#f8fafc; border-radius:14px; padding:20px 24px; border:1.5px solid #f1f5f9; }
+.info-box h6 { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#94a3b8; margin-bottom:12px; }
+.info-box p { font-size:0.92rem; color:#334155; margin:4px 0; }
+.info-box strong { color:#1e293b; }
+.factura-table { width:100%; border-collapse:collapse; margin-bottom:24px; }
+.factura-table thead tr { background:linear-gradient(135deg,#4e54c8,#8f94fb); }
+.factura-table thead th { color:white; padding:12px 16px; font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+.factura-table thead th:last-child { text-align:right; }
+.factura-table thead th:nth-child(2), .factura-table thead th:nth-child(3) { text-align:center; }
+.factura-table tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.15s; }
+.factura-table tbody tr:hover { background:#f8fafc; }
+.factura-table tbody td { padding:14px 16px; font-size:0.92rem; color:#334155; }
+.factura-table tbody td:nth-child(2) { text-align:center; }
+.factura-table tbody td:nth-child(3), .factura-table tbody td:nth-child(4) { text-align:right; }
+.factura-totales { display:flex; justify-content:flex-end; }
+.totales-box { min-width:280px; }
+.totales-row { display:flex; justify-content:space-between; padding:8px 0; font-size:0.92rem; color:#475569; border-bottom:1px solid #f1f5f9; }
+.totales-row.total { font-size:1.15rem; font-weight:800; color:#4e54c8; border-bottom:none; padding-top:12px; }
+.factura-footer { margin-top:32px; padding-top:20px; border-top:2px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; }
+.factura-footer p { font-size:0.82rem; color:#94a3b8; margin:0; }
+</style>
 
-<div class="card shadow mb-4">
-  <div class="card-header bg-primary text-white">
-    <h4 class="mb-0">Compra #{{ purchase.id }}</h4>
+<div class="factura-wrapper" id="factura-contenido">
+  <div class="factura-header">
+    <div class="factura-empresa">
+      <h2><i class="bi bi-speedometer2 me-2"></i>TecnoStock S.A.</h2>
+      <p>Sistema de Gestión de Ventas y Facturación</p>
+      <p>UNEMI © 2026</p>
+    </div>
+    <div class="factura-numero">
+      <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#94a3b8;">Compra</div>
+      <div class="num">#{{ purchase.id|stringformat:"04d" }}</div>
+      <div class="fecha">{{ purchase.purchase_date|date:"d/m/Y H:i" }}</div>
+    </div>
   </div>
-  <div class="card-body">
-    <div class="row mb-3">
-      <div class="col-md-6">
-        <p><strong>Proveedor:</strong> {{ purchase.supplier.name }}</p>
-        <p><strong>N° Documento:</strong> {{ purchase.document_number }}</p>
+
+  <div class="factura-info">
+    <div class="info-box">
+      <h6>Datos del Proveedor</h6>
+      <p><strong>{{ purchase.supplier.name }}</strong></p>
+      <p>Contacto: {{ purchase.supplier.contact_name|default:"-" }}</p>
+      <p>Correo: {{ purchase.supplier.email|default:"-" }}</p>
+      <p>Teléfono: {{ purchase.supplier.phone|default:"-" }}</p>
+    </div>
+    <div class="info-box">
+      <h6>Información de la Compra</h6>
+      <p><strong>N° Compra:</strong> {{ purchase.id|stringformat:"04d" }}</p>
+      <p><strong>N° Documento del Proveedor:</strong> {{ purchase.document_number }}</p>
+      <p><strong>Fecha:</strong> {{ purchase.purchase_date|date:"d/m/Y H:i" }}</p>
+      <p><strong>Estado:</strong>
+        {% if purchase.is_active %}
+          <span class="badge bg-success">Activa</span>
+        {% else %}
+          <span class="badge bg-danger">Inactiva</span>
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <table class="factura-table">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Cantidad</th>
+        <th>Costo Unitario</th>
+        <th>Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for detail in purchase.details.all %}
+      <tr>
+        <td>{{ detail.product.name }}</td>
+        <td>{{ detail.quantity }}</td>
+        <td>${{ detail.unit_cost }}</td>
+        <td>${{ detail.subtotal }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="factura-totales">
+    <div class="totales-box">
+      <div class="totales-row">
+        <span>Subtotal</span>
+        <span>${{ purchase.subtotal }}</span>
       </div>
-      <div class="col-md-6 text-end">
-        <p><strong>Fecha:</strong> {{ purchase.purchase_date|date:"d/m/Y H:i" }}</p>
-        <p><strong>Compra #:</strong> {{ purchase.id }}</p>
+      <div class="totales-row">
+        <span>IVA (15%)</span>
+        <span>${{ purchase.tax }}</span>
+      </div>
+      <div class="totales-row total">
+        <span>TOTAL</span>
+        <span>${{ purchase.total }}</span>
       </div>
     </div>
-    <table class="table table-bordered">
-      <thead class="table-dark">
-        <tr>
-          <th>Producto</th>
-          <th class="text-center">Cantidad</th>
-          <th class="text-end">Costo Unitario</th>
-          <th class="text-end">Subtotal</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for detail in purchase.details.all %}
-        <tr>
-          <td>{{ detail.product.name }}</td>
-          <td class="text-center">{{ detail.quantity }}</td>
-          <td class="text-end">${{ detail.unit_cost }}</td>
-          <td class="text-end">${{ detail.subtotal }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3" class="text-end fw-bold">Subtotal:</td>
-          <td class="text-end">${{ purchase.subtotal }}</td>
-        </tr>
-        <tr>
-          <td colspan="3" class="text-end fw-bold">IVA (15%):</td>
-          <td class="text-end">${{ purchase.tax }}</td>
-        </tr>
-        <tr class="table-primary">
-          <td colspan="3" class="text-end fw-bold fs-5">TOTAL:</td>
-          <td class="text-end fw-bold fs-5">${{ purchase.total }}</td>
-        </tr>
-      </tfoot>
-    </table>
-    <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-secondary">Volver</a>
-    <a href="{% url 'purchasing:purchase_delete' purchase.pk %}" class="btn btn-danger">Eliminar</a>
   </div>
+
+  <div class="factura-footer">
+    <p><i class="bi bi-shield-check me-1"></i>Documento generado electrónicamente — TecnoStock S.A.</p>
+    <p>Registro interno de compra</p>
+  </div>
+</div>
+
+<div class="d-flex gap-3 mt-4" style="max-width:860px; margin:0 auto;">
+  <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-cancelar">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+  <a href="{% url 'purchasing:purchase_pdf' purchase.pk %}" class="btn btn-guardar">
+    <i class="bi bi-file-earmark-pdf me-2"></i>Descargar PDF
+  </a>
+  <a href="{% url 'purchasing:purchase_delete' purchase.pk %}" class="btn btn-danger" style="border-radius:12px; padding:13px 20px; font-weight:600;">
+    <i class="bi bi-trash me-1"></i>Eliminar
+  </a>
 </div>
 
 {% endblock %}

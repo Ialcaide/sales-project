@@ -13,6 +13,25 @@ from .export_mixins import ExportMixin
 from django.db import models
 from shared.mixins import PermissionRequiredRedirectMixin
 from shared.decorators import audit_action, permission_required_redirect
+from shared.notifications import send_email_with_attachment
+from shared.pagination import build_extra_qs, get_page_range
+
+# Este archivo mezcla dos estilos de vista a propósito, para que veas ambos:
+#
+# - Vistas por FUNCIÓN (FBV, ej. brand_list, invoice_create): una función
+#   normal de Python que recibe `request` y devuelve una respuesta. Más
+#   explícitas, buenas para lógica particular (ej. invoice_create, que
+#   valida stock y arma la factura paso a paso).
+#
+# - Vistas por CLASE (CBV, ej. ProductCreateView): heredan de clases
+#   genéricas de Django (CreateView/UpdateView/DeleteView/DetailView) que ya
+#   traen el CRUD resuelto — con 5-6 líneas alcanza. Mejor para el caso común
+#   "formulario que crea/edita/borra un modelo", como Product/Customer/Supplier.
+#
+# TODAS las vistas que modifican datos están protegidas con el permiso
+# Django real del modelo correspondiente (permission_required /
+# @permission_required_redirect) — ver la sección "Sistema de Roles y
+# Permisos" del README para el porqué.
 
 @login_required
 def home(request):
@@ -34,6 +53,9 @@ def home(request):
     return render(request, 'billing/home.html', context)
 
 # === REGISTRO ===
+# NOTA: SignUpView es un flujo de auto-registro público que ya NO está
+# enlazado desde ningún template del sistema (ver la nota en forms.py sobre
+# SignUpForm). El alta real de usuarios es security.views.RegisterView.
 class SignUpView(CreateView):
     form_class = SignUpForm
     template_name = 'registration/signup.html'
@@ -45,8 +67,16 @@ class SignUpView(CreateView):
 
 
 # === BRAND (FBV) ===
+# brand_list es el ejemplo más simple de "listado con filtros, exportación y
+# paginación" — el mismo esqueleto se repite en productgroup_list,
+# supplier_list, product_list, customer_list e invoice_list más abajo (y en
+# purchasing/views.py -> purchase_list). Una vez que entiendes este, entiendes
+# todos: 1) leer filtros de la URL (?q=...&is_active=...), 2) aplicar
+# .filter() al queryset solo si el filtro viene en la URL, 3) si piden
+# exportar, cortar acá y devolver el PDF/Excel, 4) paginar lo que sobra,
+# 5) renderizar el template con todo listo.
 @permission_required_redirect('billing.view_brand', '/')
-@audit_action('LIST_BRANDS')
+@audit_action('LIST_BRANDS')  # registra en consola quién listó marcas y cuándo
 def brand_list(request):
     query = request.GET.get('q', '')
     is_active = request.GET.get('is_active', '')
@@ -86,6 +116,8 @@ def brand_list(request):
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'is_active': is_active,
     }
@@ -116,6 +148,12 @@ def brand_update(request, pk):
     else: form = BrandForm(instance=brand)
     return render(request, 'billing/brand_form.html', {'form':form, 'title':'Ediatr Marca'})
 
+@permission_required_redirect('billing.view_brand', '/brands/')
+def brand_detail(request, pk):
+    brand = get_object_or_404(Brand, pk=pk)
+    return render(request, 'billing/brand_detail.html', {'brand': brand})
+
+
 @permission_required_redirect('billing.delete_brand', '/brands/')
 @audit_action('DELETE_BRAND')
 def brand_delete(request, pk):
@@ -126,8 +164,15 @@ def brand_delete(request, pk):
         return redirect('billing:brand_list')
     return render(request, 'billing/brand_confirm_delete.html', {'object': brand})
 
+# Clase sin usar (quedó de un intento anterior de convertir el listado a
+# CBV): no tiene 'model' ni 'template_name', y ninguna URL la referencia — la
+# que de verdad se usa es la función productgroup_list de abajo. Se deja
+# como referencia de que "ListView" también existiría como opción para un
+# listado, aunque acá se optó por la función.
 class ProductGroupListView(LoginRequiredMixin, ListView):
     pass
+
+
 @permission_required_redirect('billing.view_productgroup', '/')
 def productgroup_list(request):
     query = request.GET.get('q', '')
@@ -167,11 +212,19 @@ def productgroup_list(request):
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'is_active': is_active,
     }
     return render(request, 'billing/productgroup_list.html', context)
 
+# A partir de acá, el patrón CBV que se repite para ProductGroup, Supplier,
+# Product y Customer: una clase por acción (Create/Update/Delete/Detail),
+# 'model' + 'fields' (o 'form_class' si el formulario está en forms.py) le
+# dicen a Django qué mostrar, y 'permission_required' qué permiso exigir.
+# LoginRequiredMixin va SIEMPRE primero en la herencia (si no hay sesión,
+# redirige al login antes de siquiera revisar el permiso).
 class ProductGroupCreateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, CreateView):
     model = ProductGroup
     fields = ['name', 'is_active']
@@ -193,6 +246,13 @@ class ProductGroupDeleteView(LoginRequiredMixin, PermissionRequiredRedirectMixin
     template_name = 'billing/productgroup_confirm_delete.html'
     success_url = reverse_lazy('billing:productgroup_list')
     permission_required = 'billing.delete_productgroup'
+    permission_redirect_url = '/groups/'
+
+class ProductGroupDetailView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DetailView):
+    model = ProductGroup
+    template_name = 'billing/productgroup_detail.html'
+    context_object_name = 'group'
+    permission_required = 'billing.view_productgroup'
     permission_redirect_url = '/groups/'
 
 @permission_required_redirect('billing.view_supplier', '/')
@@ -240,6 +300,8 @@ def supplier_list(request):
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'is_active': is_active,
     }
@@ -353,6 +415,8 @@ def product_list(request):
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'selected_brand': brand_id,
         'selected_group': group_id,
@@ -437,6 +501,8 @@ def customer_list(request):
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'is_active': is_active,
     }
@@ -519,12 +585,14 @@ def invoice_list(request):
         else:
             return exporter.export_to_excel(invoices)
 
-    paginator = Paginator(invoices, 3)
+    paginator = Paginator(invoices, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     context = {
         'page_obj': page_obj,
+        'page_range': get_page_range(page_obj),
+        'extra_qs': build_extra_qs(request),
         'query': query,
         'date_from': date_from,
         'date_to': date_to,
@@ -533,11 +601,19 @@ def invoice_list(request):
     }
     return render(request, 'billing/invoice_list.html', context)
 
+# La vista más compleja del proyecto: crea una factura con VARIAS líneas de
+# producto a la vez (usa InvoiceDetailFormSet), valida stock, y al confirmar
+# descuenta el inventario. Vale la pena leerla completa una vez para entender
+# el patrón "formulario + formset" que se repite en purchasing/views.py
+# -> purchase_create con la misma estructura.
 @permission_required_redirect('billing.add_invoice', '/invoices/')
 def invoice_create(request):
     import json
 
-    # Datos siempre disponibles
+    # products_data/customers_data se mandan como JSON al template para que
+    # el JavaScript del formulario pueda autocompletar precio/stock al elegir
+    # un producto, SIN pedirle nada al servidor (todo pasa en el navegador).
+    # Ver billing/templates/billing/invoice_form.html.
     products_data = {
         p.id: {'price': float(p.unit_price), 'stock': p.stock, 'name': p.name}
         for p in Product.objects.filter(is_active=True)
@@ -555,9 +631,14 @@ def invoice_create(request):
     }
 
     if request.method == 'POST':
-        form = InvoiceForm(request.POST)
-        formset = InvoiceDetailFormSet(request.POST)
+        form = InvoiceForm(request.POST)          # el cliente
+        formset = InvoiceDetailFormSet(request.POST)  # las líneas (producto/cantidad/precio)
 
+        # form.is_valid() y formset.is_valid() solo revisan tipos/campos
+        # obligatorios (ej. "cantidad debe ser un número"). Las reglas de
+        # NEGOCIO (cliente activo, no repetir producto, stock suficiente) se
+        # revisan a mano después, porque dependen de otros datos (el estado
+        # actual del Customer/Product en la base) que un ModelForm no conoce.
         if form.is_valid() and formset.is_valid():
 
             # Validar cliente activo
@@ -599,13 +680,18 @@ def invoice_create(request):
                                 **context_base, 'form': form, 'formset': formset
                             })
 
-            # Guardar factura
+            # commit=False: crea el objeto Invoice en memoria SIN guardarlo
+            # todavía en la base de datos. Se necesita así porque el formset
+            # (las líneas) requiere que la factura YA tenga un id (invoice.save())
+            # antes de poder asociarle las líneas (formset.instance = invoice).
             invoice = form.save(commit=False)
             invoice.save()
             formset.instance = invoice
-            formset.save()
+            formset.save()  # ahora sí crea cada InvoiceDetail, ligado a esta invoice
 
-            # Bajar stock
+            # Bajar stock: por cada línea de la factura, resta la cantidad
+            # vendida del stock del producto. Ya se validó arriba que hay
+            # stock suficiente, pero igual se frena en 0 por seguridad.
             for detail in invoice.details.all():
                 product = detail.product
                 product.stock -= detail.quantity
@@ -613,12 +699,40 @@ def invoice_create(request):
                     product.stock = 0
                 product.save()
 
+            # Los totales se calculan DESPUÉS de guardar las líneas (recién
+            # ahí existen y tienen su subtotal calculado por
+            # InvoiceDetail.save()). IVA fijo del 15%.
             subtotal = sum(d.subtotal for d in invoice.details.all())
             invoice.subtotal = subtotal
             invoice.tax = subtotal * Decimal('0.15')
             invoice.total = invoice.subtotal + invoice.tax
             invoice.save()
-            messages.success(request, f'Factura #{invoice.id} creada! Total: ${invoice.total}')
+
+            # Enviar automáticamente el PDF de la factura al correo del
+            # cliente. Se reutiliza _build_invoice_pdf (la misma función que
+            # arma el PDF para la descarga manual en invoice_pdf) para no
+            # duplicar el diseño del comprobante en dos lugares.
+            if invoice.customer.email:
+                pdf_bytes = _build_invoice_pdf(invoice)
+                subject = f'Tu factura #{invoice.id:04d} — TecnoStock S.A.'
+                body = (
+                    f'Estimado/a {invoice.customer.full_name},\n\n'
+                    f'Adjuntamos el PDF de tu factura #{invoice.id:04d} por un total de ${invoice.total}.\n\n'
+                    f'Gracias por tu compra.\n\n'
+                    f'Atentamente,\n'
+                    f'TecnoStock S.A.'
+                )
+                sent = send_email_with_attachment(
+                    invoice.customer.email, subject, body,
+                    f'factura_{invoice.id:04d}.pdf', pdf_bytes,
+                )
+                if sent:
+                    messages.success(request, f'Factura #{invoice.id} creada! Total: ${invoice.total}. PDF enviado a {invoice.customer.email}.')
+                else:
+                    messages.warning(request, f'Factura #{invoice.id} creada! Total: ${invoice.total}. No se pudo enviar el PDF por correo.')
+            else:
+                messages.success(request, f'Factura #{invoice.id} creada! Total: ${invoice.total}. El cliente no tiene correo registrado, no se envió el PDF.')
+
             return redirect('billing:invoice_list')
 
     else:
@@ -639,20 +753,17 @@ def invoice_detail(request, pk):
     )
     return render(request, 'billing/invoice_detail.html', {'invoice': invoice})
     
-@permission_required_redirect('billing.view_invoice', '/invoices/')
-def invoice_pdf(request, pk):
+# Arma los bytes del PDF de una factura y los devuelve (sin HttpResponse
+# todavía) — así el mismo PDF sirve tanto para la descarga manual
+# (invoice_pdf) como para adjuntarlo al correo automático al crear la
+# factura (invoice_create más abajo), sin duplicar todo este código dos veces.
+def _build_invoice_pdf(invoice):
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.units import cm
-    from django.http import HttpResponse
     import io
-
-    invoice = get_object_or_404(
-        Invoice.objects.select_related('customer').prefetch_related('details__product'),
-        pk=pk
-    )
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
@@ -753,14 +864,30 @@ def invoice_pdf(request, pk):
 
     doc.build(story)
     buffer.seek(0)
-    response = HttpResponse(buffer, content_type='application/pdf')
+    return buffer.getvalue()
+
+
+@permission_required_redirect('billing.view_invoice', '/invoices/')
+def invoice_pdf(request, pk):
+    from django.http import HttpResponse
+
+    invoice = get_object_or_404(
+        Invoice.objects.select_related('customer').prefetch_related('details__product'),
+        pk=pk
+    )
+    pdf_bytes = _build_invoice_pdf(invoice)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="factura_{invoice.id:04d}.pdf"'
     return response
+
 
 @permission_required_redirect('billing.delete_invoice', '/invoices/')
 def invoice_delete(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     if request.method == 'POST':
+        # Al borrar una factura, hay que devolver al inventario lo que se
+        # vendió — si no, el stock quedaría descontado para siempre aunque
+        # la venta ya no exista.
         # Restaurar stock antes de eliminar
         for detail in invoice.details.all():
             product = detail.product

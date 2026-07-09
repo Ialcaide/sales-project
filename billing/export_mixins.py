@@ -11,6 +11,20 @@ from reportlab.lib.units import cm
 class ExportMixin:
     """
     Mixin genérico para exportar listados a Excel y PDF.
+
+    No se hereda como los mixins de shared/ (no se mete en el MRO de una
+    vista) — se instancia directo dentro de la vista que lo necesita:
+
+        exporter = ExportMixin()
+        exporter.export_filename = 'productos'
+        exporter.export_title = 'Listado de Productos'
+        exporter.export_headers = ['Nombre', 'Marca', 'Precio']
+        exporter.get_export_rows = lambda qs: [[p.name, p.brand.name, p.unit_price] for p in qs]
+        return exporter.export_to_pdf(queryset)  # o export_to_excel(queryset)
+
+    get_export_rows recibe el queryset YA FILTRADO (con los mismos filtros
+    que el usuario tiene aplicados en pantalla) y debe devolver una lista de
+    listas: una fila por registro, en el mismo orden que export_headers.
     """
 
     export_filename = 'listado'

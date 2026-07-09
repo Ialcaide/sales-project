@@ -13,6 +13,11 @@ class Brand(models.Model):
         verbose_name_plural = 'Marcas'
         ordering = ['name']
     def __str__(self): return self.name
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.name or not self.name.strip():
+            raise ValidationError({'name': 'El nombre de la marca es obligatorio.'})
 
 class ProductGroup(models.Model):
     """Grupos/categorías de productos."""
@@ -67,12 +72,31 @@ class Product(models.Model):
         return self.stock * self.unit_price
 
     @property
-    def margin(self):
-        if self.last_cost and self.last_cost > 0:
-            return round((self.unit_price - self.last_cost) / self.last_cost * 100, 2)
-        return None
+    def placeholder_image(self):
+        """Imagen generada automáticamente (SVG) para productos sin foto."""
+        import hashlib
+        from urllib.parse import quote
+        palette = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777']
+        seed = int(hashlib.md5(self.name.encode('utf-8')).hexdigest(), 16)
+        color = palette[seed % len(palette)]
+        initial = (self.name[:1] or '?').upper()
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">'
+            f'<rect width="100%" height="100%" fill="{color}"/>'
+            '<text x="50%" y="50%" font-family="sans-serif" font-size="90" fill="#ffffff" '
+            f'text-anchor="middle" dominant-baseline="central">{initial}</text>'
+            '</svg>'
+        )
+        return f'data:image/svg+xml;utf8,{quote(svg)}'
 
     def __str__(self): return f'{self.name} ({self.brand.name})'
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.unit_price is not None and self.unit_price <= 0:
+            raise ValidationError({'unit_price': 'El precio debe ser mayor a 0.'})
+        if self.stock is not None and self.stock < 0:
+            raise ValidationError({'stock': 'El stock no puede ser negativo.'})
 
 
 class Customer(models.Model):
@@ -93,6 +117,13 @@ class Customer(models.Model):
     def __str__(self): return f'{self.last_name}, {self.first_name}'
     @property
     def full_name(self): return f'{self.first_name} {self.last_name}'
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.first_name or not self.first_name.strip():
+            raise ValidationError({'first_name': 'El nombre es obligatorio.'})
+        if not self.last_name or not self.last_name.strip():
+            raise ValidationError({'last_name': 'El apellido es obligatorio.'})
 
 class CustomerProfile(models.Model):
     """Perfil extendido. OneToOne con Customer."""

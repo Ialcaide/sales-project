@@ -11,25 +11,8 @@ from decimal import Decimal
 from django.core.paginator import Paginator
 from .export_mixins import ExportMixin
 from django.db import models
-from shared.mixins import StaffRequiredMixin
-from shared.decorators import audit_action
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
-from shared.mixins import StaffRequiredMixin, GroupRequiredMixin
-
-class CustomerUpdateView(LoginRequiredMixin, GroupRequiredMixin, UpdateView):
-    model = Customer
-    fields = ['dni', 'first_name', 'last_name', 'email', 'phone', 'address', 'is_active']
-    template_name = 'billing/customer_form.html'
-    success_url = reverse_lazy('billing:customer_list')
-    group_required = ['Administrador', 'Analista de Compras']
-    group_redirect_url = '/customers/'
-
-class CustomerDeleteView(LoginRequiredMixin, GroupRequiredMixin, DeleteView):
-    model = Customer
-    template_name = 'billing/customer_confirm_delete.html'
-    success_url = reverse_lazy('billing:customer_list')
-    group_required = ['Administrador', 'Analista de Compras']
-    group_redirect_url = '/customers/'
+from shared.mixins import PermissionRequiredRedirectMixin
+from shared.decorators import audit_action, permission_required_redirect
 
 @login_required
 def home(request):
@@ -62,7 +45,7 @@ class SignUpView(CreateView):
 
 
 # === BRAND (FBV) ===
-@login_required
+@permission_required_redirect('billing.view_brand', '/')
 @audit_action('LIST_BRANDS')
 def brand_list(request):
     query = request.GET.get('q', '')
@@ -108,7 +91,7 @@ def brand_list(request):
     }
     return render(request, 'billing/brand_list.html', context)
 
-@login_required
+@permission_required_redirect('billing.add_brand', '/brands/')
 @audit_action('CREATE_BRAND')
 def brand_create(request):
     if request.method == 'POST':
@@ -120,7 +103,7 @@ def brand_create(request):
     else: form = BrandForm()
     return render(request, 'billing/brand_form.html', {'form':form, 'title':'Crear marca'})
 
-@login_required
+@permission_required_redirect('billing.change_brand', '/brands/')
 @audit_action('UPDATE_BRAND')
 def brand_update(request, pk):
     brand = get_object_or_404(Brand, pk=pk)
@@ -133,7 +116,7 @@ def brand_update(request, pk):
     else: form = BrandForm(instance=brand)
     return render(request, 'billing/brand_form.html', {'form':form, 'title':'Ediatr Marca'})
 
-@login_required
+@permission_required_redirect('billing.delete_brand', '/brands/')
 @audit_action('DELETE_BRAND')
 def brand_delete(request, pk):
     brand = get_object_or_404(Brand, pk=pk)
@@ -145,7 +128,7 @@ def brand_delete(request, pk):
 
 class ProductGroupListView(LoginRequiredMixin, ListView):
     pass
-@login_required
+@permission_required_redirect('billing.view_productgroup', '/')
 def productgroup_list(request):
     query = request.GET.get('q', '')
     is_active = request.GET.get('is_active', '')
@@ -189,25 +172,30 @@ def productgroup_list(request):
     }
     return render(request, 'billing/productgroup_list.html', context)
 
-class ProductGroupCreateView(LoginRequiredMixin, CreateView):
+class ProductGroupCreateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, CreateView):
     model = ProductGroup
     fields = ['name', 'is_active']
     template_name = 'billing/productgroup_form.html'
     success_url = reverse_lazy('billing:productgroup_list')
+    permission_required = 'billing.add_productgroup'
+    permission_redirect_url = '/groups/'
 
-class ProductGroupUpdateView(LoginRequiredMixin, UpdateView):
+class ProductGroupUpdateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, UpdateView):
     model = ProductGroup
     fields = ['name', 'is_active']
     template_name = 'billing/productgroup_form.html'
     success_url = reverse_lazy('billing:productgroup_list')
+    permission_required = 'billing.change_productgroup'
+    permission_redirect_url = '/groups/'
 
-class ProductGroupDeleteView(LoginRequiredMixin, StaffRequiredMixin, DeleteView):
+class ProductGroupDeleteView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DeleteView):
     model = ProductGroup
     template_name = 'billing/productgroup_confirm_delete.html'
     success_url = reverse_lazy('billing:productgroup_list')
-    staff_redirect_url = '/groups/'
+    permission_required = 'billing.delete_productgroup'
+    permission_redirect_url = '/groups/'
 
-@login_required
+@permission_required_redirect('billing.view_supplier', '/')
 def supplier_list(request):
     query = request.GET.get('q', '')
     is_active = request.GET.get('is_active', '')
@@ -257,35 +245,44 @@ def supplier_list(request):
     }
     return render(request, 'billing/supplier_list.html', context)
 
-class SupplierCreateView(LoginRequiredMixin, CreateView):
+class SupplierCreateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, CreateView):
     model = Supplier
     fields = ['name', 'contact_name', 'email', 'phone', 'address', 'is_active']
     template_name = 'billing/supplier_form.html'
     success_url = reverse_lazy('billing:supplier_list')
+    permission_required = 'billing.add_supplier'
+    permission_redirect_url = '/suppliers/'
 
-class SupplierUpdateView(LoginRequiredMixin, UpdateView):
+class SupplierUpdateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, UpdateView):
     model = Supplier
     fields = ['name', 'contact_name', 'email', 'phone', 'address', 'is_active']
     template_name = 'billing/supplier_form.html'
     success_url = reverse_lazy('billing:supplier_list')
+    permission_required = 'billing.change_supplier'
+    permission_redirect_url = '/suppliers/'
 
-class SupplierDeleteView(LoginRequiredMixin, StaffRequiredMixin, DeleteView):
+class SupplierDeleteView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DeleteView):
     model = Supplier
     template_name = 'billing/supplier_confirm_delete.html'
     success_url = reverse_lazy('billing:supplier_list')
-    staff_redirect_url = '/suppliers/'
-    
-class SupplierDetailView(LoginRequiredMixin, DetailView):
+    permission_required = 'billing.delete_supplier'
+    permission_redirect_url = '/suppliers/'
+
+class SupplierDetailView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DetailView):
     model = Supplier
     template_name = 'billing/supplier_detail.html'
     context_object_name = 'supplier'
+    permission_required = 'billing.view_supplier'
+    permission_redirect_url = '/suppliers/'
 
-class ProductDetailView(LoginRequiredMixin, DetailView):
+class ProductDetailView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DetailView):
     model = Product
     template_name = 'billing/product_detail.html'
     context_object_name = 'product'
+    permission_required = 'billing.view_product'
+    permission_redirect_url = '/products/'
 
-@login_required
+@permission_required_redirect('billing.view_product', '/')
 def product_list(request):
     query = request.GET.get('q', '')
     brand_id = request.GET.get('brand', '')
@@ -370,25 +367,30 @@ def product_list(request):
     }
     return render(request, 'billing/product_list.html', context)
 
-class ProductCreateView(LoginRequiredMixin, CreateView):
+class ProductCreateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, CreateView):
     model = Product
     form_class = ProductForm
     template_name = 'billing/product_form.html'
     success_url = reverse_lazy('billing:product_list')
+    permission_required = 'billing.add_product'
+    permission_redirect_url = '/products/'
 
-class ProductUpdateView(LoginRequiredMixin, UpdateView):
+class ProductUpdateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, UpdateView):
     model = Product
     form_class = ProductForm
     template_name = 'billing/product_form.html'
     success_url = reverse_lazy('billing:product_list')
+    permission_required = 'billing.change_product'
+    permission_redirect_url = '/products/'
 
-class ProductDeleteView(LoginRequiredMixin, StaffRequiredMixin, DeleteView):
+class ProductDeleteView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DeleteView):
     model = Product
     template_name = 'billing/product_confirm_delete.html'
     success_url = reverse_lazy('billing:product_list')
-    staff_redirect_url = '/products/'
+    permission_required = 'billing.delete_product'
+    permission_redirect_url = '/products/'
 
-@login_required
+@permission_required_redirect('billing.view_customer', '/')
 def customer_list(request):
     query = request.GET.get('q', '')
     is_active = request.GET.get('is_active', '')
@@ -440,30 +442,37 @@ def customer_list(request):
     }
     return render(request, 'billing/customer_list.html', context)
 
-class CustomerCreateView(LoginRequiredMixin, CreateView):
+class CustomerCreateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, CreateView):
     model = Customer
     fields = ['dni', 'first_name', 'last_name', 'email', 'phone', 'address', 'is_active']
     template_name = 'billing/customer_form.html'
     success_url = reverse_lazy('billing:customer_list')
+    permission_required = 'billing.add_customer'
+    permission_redirect_url = '/customers/'
 
-class CustomerUpdateView(LoginRequiredMixin, UpdateView):
+class CustomerUpdateView(LoginRequiredMixin, PermissionRequiredRedirectMixin, UpdateView):
     model = Customer
     fields = ['dni', 'first_name', 'last_name', 'email', 'phone', 'address', 'is_active']
     template_name = 'billing/customer_form.html'
     success_url = reverse_lazy('billing:customer_list')
+    permission_required = 'billing.change_customer'
+    permission_redirect_url = '/customers/'
 
-class CustomerDeleteView(LoginRequiredMixin, StaffRequiredMixin, DeleteView):
+class CustomerDeleteView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DeleteView):
     model = Customer
     template_name = 'billing/customer_confirm_delete.html'
     success_url = reverse_lazy('billing:customer_list')
-    staff_redirect_url = '/customers/'
+    permission_required = 'billing.delete_customer'
+    permission_redirect_url = '/customers/'
 
-class CustomerDetailView(LoginRequiredMixin, DetailView):
+class CustomerDetailView(LoginRequiredMixin, PermissionRequiredRedirectMixin, DetailView):
     model = Customer
     template_name = 'billing/customer_detail.html'
-    context_object_name = 'customer' 
-    
-@login_required
+    context_object_name = 'customer'
+    permission_required = 'billing.view_customer'
+    permission_redirect_url = '/customers/'
+
+@permission_required_redirect('billing.view_invoice', '/')
 def invoice_list(request):
     query = request.GET.get('q', '')
     date_from = request.GET.get('date_from', '')
@@ -524,44 +533,79 @@ def invoice_list(request):
     }
     return render(request, 'billing/invoice_list.html', context)
 
-@login_required
+@permission_required_redirect('billing.add_invoice', '/invoices/')
 def invoice_create(request):
     import json
+
+    # Datos siempre disponibles
+    products_data = {
+        p.id: {'price': float(p.unit_price), 'stock': p.stock, 'name': p.name}
+        for p in Product.objects.filter(is_active=True)
+    }
+    customers_data = {
+        c.id: {'dni': c.dni, 'first_name': c.first_name, 'last_name': c.last_name,
+               'email': c.email or '', 'phone': c.phone or '', 'address': c.address or ''}
+        for c in Customer.objects.filter(is_active=True)
+    }
+
+    context_base = {
+        'title': 'Crear Factura',
+        'products_json': json.dumps(products_data),
+        'customers_json': json.dumps(customers_data),
+    }
+
     if request.method == 'POST':
         form = InvoiceForm(request.POST)
         formset = InvoiceDetailFormSet(request.POST)
+
         if form.is_valid() and formset.is_valid():
 
-            # Validar stock suficiente antes de guardar
-            products_data_val = {
-                p.id: {'price': float(p.unit_price), 'stock': p.stock, 'name': p.name}
-                for p in Product.objects.filter(is_active=True)
-            }
-            customers_data_val = {
-                c.id: {'dni': c.dni, 'first_name': c.first_name, 'last_name': c.last_name,
-                       'email': c.email or '', 'phone': c.phone or '', 'address': c.address or ''}
-                for c in Customer.objects.filter(is_active=True)
-            }
+            # Validar cliente activo
+            customer = form.cleaned_data.get('customer')
+            if customer and not customer.is_active:
+                messages.error(request, f'El cliente {customer.full_name} está inactivo.')
+                return render(request, 'billing/invoice_form.html', {
+                    **context_base, 'form': form, 'formset': formset
+                })
+
+            # Validar al menos un producto
+            productos_validos = [
+                f for f in formset
+                if f.cleaned_data and not f.cleaned_data.get('DELETE')
+                and f.cleaned_data.get('product')
+            ]
+            if not productos_validos:
+                messages.error(request, 'La factura debe tener al menos un producto.')
+                return render(request, 'billing/invoice_form.html', {
+                    **context_base, 'form': form, 'formset': formset
+                })
+
+            # Validar productos duplicados y stock
+            productos_ids = []
             for detail_form in formset:
                 if detail_form.cleaned_data and not detail_form.cleaned_data.get('DELETE'):
                     product = detail_form.cleaned_data.get('product')
                     quantity = detail_form.cleaned_data.get('quantity', 0)
-                    if product and quantity > product.stock:
-                        messages.error(request, f'Stock insuficiente para "{product.name}". Stock disponible: {product.stock}')
-                        return render(request, 'billing/invoice_form.html', {
-                            'form': form,
-                            'formset': formset,
-                            'title': 'Crear Factura',
-                            'products_json': json.dumps(products_data_val),
-                            'customers_json': json.dumps(customers_data_val),
-                        })
+                    if product:
+                        if product.id in productos_ids:
+                            messages.error(request, f'El producto "{product.name}" está duplicado.')
+                            return render(request, 'billing/invoice_form.html', {
+                                **context_base, 'form': form, 'formset': formset
+                            })
+                        productos_ids.append(product.id)
+                        if quantity > product.stock:
+                            messages.error(request, f'Stock insuficiente para "{product.name}". Disponible: {product.stock}')
+                            return render(request, 'billing/invoice_form.html', {
+                                **context_base, 'form': form, 'formset': formset
+                            })
 
+            # Guardar factura
             invoice = form.save(commit=False)
             invoice.save()
             formset.instance = invoice
-            formset.save()  # ← aquí se guardan los detalles
+            formset.save()
 
-            # Actualizar stock
+            # Bajar stock
             for detail in invoice.details.all():
                 product = detail.product
                 product.stock -= detail.quantity
@@ -576,29 +620,18 @@ def invoice_create(request):
             invoice.save()
             messages.success(request, f'Factura #{invoice.id} creada! Total: ${invoice.total}')
             return redirect('billing:invoice_list')
+
     else:
         form = InvoiceForm()
         formset = InvoiceDetailFormSet()
 
-    products_data = {
-        p.id: {'price': float(p.unit_price), 'stock': p.stock, 'name': p.name}
-        for p in Product.objects.filter(is_active=True)
-    }
-    customers_data = {
-        c.id: {'dni': c.dni, 'first_name': c.first_name, 'last_name': c.last_name,
-               'email': c.email or '', 'phone': c.phone or '', 'address': c.address or ''}
-        for c in Customer.objects.filter(is_active=True)
-    }
-
     return render(request, 'billing/invoice_form.html', {
+        **context_base,
         'form': form,
         'formset': formset,
-        'title': 'Crear Factura',
-        'products_json': json.dumps(products_data),
-        'customers_json': json.dumps(customers_data),
-    })
+    })       
     
-@login_required
+@permission_required_redirect('billing.view_invoice', '/invoices/')
 def invoice_detail(request, pk):
     invoice = get_object_or_404(
         Invoice.objects.select_related('customer').prefetch_related('details__product'),
@@ -606,7 +639,7 @@ def invoice_detail(request, pk):
     )
     return render(request, 'billing/invoice_detail.html', {'invoice': invoice})
     
-@login_required
+@permission_required_redirect('billing.view_invoice', '/invoices/')
 def invoice_pdf(request, pk):
     from reportlab.lib.pagesizes import letter
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
@@ -724,16 +757,17 @@ def invoice_pdf(request, pk):
     response['Content-Disposition'] = f'attachment; filename="factura_{invoice.id:04d}.pdf"'
     return response
 
-@login_required
+@permission_required_redirect('billing.delete_invoice', '/invoices/')
 def invoice_delete(request, pk):
-    if not (request.user.is_superuser or request.user.groups.filter(name='Administrador').exists()):
-        from django.contrib import messages
-        messages.error(request, 'No tienes permiso para eliminar facturas.')
-        return redirect('billing:invoice_list')
     invoice = get_object_or_404(Invoice, pk=pk)
     if request.method == 'POST':
+        # Restaurar stock antes de eliminar
+        for detail in invoice.details.all():
+            product = detail.product
+            product.stock += detail.quantity
+            product.save()
         invoice_id = invoice.id
         invoice.delete()
-        messages.success(request, f'Factura #{invoice_id} eliminada!')
+        messages.success(request, f'Factura #{invoice_id} eliminada y stock restaurado.')
         return redirect('billing:invoice_list')
     return render(request, 'billing/invoice_confirm_delete.html', {'object': invoice})

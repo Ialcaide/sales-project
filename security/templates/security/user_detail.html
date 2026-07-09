@@ -1,0 +1,45 @@
+{% extends 'billing/base.html' %}
+{% block title %}Usuario: {{ viewed_user.username }}{% endblock %}
+{% block content %}
+
+<div class="card shadow mb-4">
+  <div class="card-header bg-primary text-white">
+    <h4 class="mb-0">Usuario: {{ viewed_user.username }}</h4>
+  </div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <p><strong>Nombre completo:</strong> {{ viewed_user.first_name }} {{ viewed_user.last_name }}</p>
+        <p><strong>Correo:</strong> {{ viewed_user.email|default:"-" }}</p>
+        <p><strong>Teléfono / WhatsApp:</strong> {{ viewed_user.profile.phone|default:"-" }}</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <p>
+          <strong>Estado:</strong>
+          {% if viewed_user.is_active %}
+            <span class="badge bg-success">Activo</span>
+          {% else %}
+            <span class="badge bg-danger">Inactivo</span>
+          {% endif %}
+        </p>
+        <p><strong>Fecha de registro:</strong> {{ viewed_user.date_joined|date:"d/m/Y H:i" }}</p>
+        <p><strong>Último ingreso:</strong> {{ viewed_user.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</p>
+      </div>
+    </div>
+
+    <p><strong>Roles:</strong></p>
+    <div class="mb-3">
+      {% for g in viewed_user.groups.all %}
+        <span class="badge bg-info">{{ g.name }}</span>
+      {% empty %}
+        <span class="badge bg-secondary">Sin rol</span>
+      {% endfor %}
+    </div>
+
+    <a href="{% url 'security:user_list' %}" class="btn btn-secondary">Regresar</a>
+    <a href="{% url 'security:user_update' viewed_user.pk %}" class="btn btn-warning">Editar</a>
+    <a href="{% url 'security:user_delete' viewed_user.pk %}" class="btn btn-danger">Eliminar</a>
+  </div>
+</div>
+
+{% endblock %}

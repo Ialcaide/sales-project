@@ -1,17 +1,67 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth import login
+from django.conf import settings
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User, Group, Permission
+from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
-from django.urls import reverse_lazy
-from django.views.generic import CreateView, UpdateView, DeleteView
+from django.urls import reverse_lazy, reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.views.generic import CreateView, UpdateView, DeleteView, DetailView, FormView
 from django.core.paginator import Paginator
 from django.db import models
 
 from shared.mixins import GroupRequiredMixin
+from shared.notifications import send_credentials_email, send_whatsapp_message
 from billing.export_mixins import ExportMixin
-from .forms import UserRegisterForm, UserUpdateForm, GroupForm, PermissionForm
+from .forms import UserRegisterForm, UserUpdateForm, GroupForm, PermissionForm, RecoverCredentialsForm
+
+
+def _full_name(user):
+    return f'{user.first_name} {user.last_name}'.strip() or user.username
+
+
+def _account_created_message(user, password, role):
+    login_url = f'{settings.SITE_URL}{reverse("security:login")}'
+    body = (
+        f'Estimado/a {_full_name(user)},\n\n'
+        f'Su cuenta ha sido creada exitosamente en el Sistema de Ventas TecnoStock.\n\n'
+        f'A continuación, sus credenciales de acceso:\n\n'
+        f'Usuario: {user.username}\n'
+        f'Contraseña: {password}\n'
+        f'Rol asignado: {role.name}\n\n'
+        f'Por favor, ingrese al sistema a través del siguiente enlace:\n'
+        f'{login_url}\n\n'
+        f'Le recomendamos cambiar su contraseña después de su primer inicio de sesión.\n\n'
+        f'Atentamente,\n'
+        f'Administración — Sistema de Ventas TecnoStock'
+    )
+    subject = 'Creación de Cuenta — Sistema de Ventas TecnoStock'
+    return subject, body
+
+
+def _account_updated_message(user):
+    login_url = f'{settings.SITE_URL}{reverse("security:login")}'
+    roles = ', '.join(g.name for g in user.groups.all()) or 'Sin rol asignado'
+    body = (
+        f'Estimado/a {_full_name(user)},\n\n'
+        f'Le informamos que su cuenta en el Sistema de Ventas TecnoStock ha sido actualizada '
+        f'por el administrador.\n\n'
+        f'Datos actuales de su cuenta:\n\n'
+        f'Usuario: {user.username}\n'
+        f'Correo: {user.email}\n'
+        f'Rol(es): {roles}\n'
+        f'Estado: {"Activo" if user.is_active else "Inactivo"}\n\n'
+        f'Puede ingresar al sistema a través del siguiente enlace:\n'
+        f'{login_url}\n\n'
+        f'Si usted no reconoce este cambio, contacte al administrador del sistema.\n\n'
+        f'Atentamente,\n'
+        f'Administración — Sistema de Ventas TecnoStock'
+    )
+    subject = 'Actualización de Cuenta — Sistema de Ventas TecnoStock'
+    return subject, body
 
 
 class AdminOnlyMixin(LoginRequiredMixin, GroupRequiredMixin):
@@ -25,20 +75,32 @@ def admin_required(view_func):
     def wrapper(request, *args, **kwargs):
         if request.user.is_superuser or request.user.groups.filter(name='Administrador').exists():
             return view_func(request, *args, **kwargs)
-        from django.contrib import messages
         messages.error(request, 'No tienes permiso para acceder a esta opción.')
         return redirect('/')
     return wrapper
 
 
-class RegisterView(CreateView):
+class RegisterView(AdminOnlyMixin, CreateView):
     form_class = UserRegisterForm
     template_name = 'security/register.html'
-    success_url = reverse_lazy('home')
+    success_url = reverse_lazy('security:user_list')
 
     def form_valid(self, form):
+        password = form.cleaned_data['password1']
+        phone = form.cleaned_data['phone']
+        role = form.cleaned_data['role']
         response = super().form_valid(form)
-        login(self.request, self.object)
+
+        subject, body = _account_created_message(self.object, password, role)
+        email_sent = send_credentials_email(self.object.email, subject, body)
+        whatsapp_sent = send_whatsapp_message(phone, body)
+
+        if email_sent and whatsapp_sent:
+            messages.success(self.request, f'Usuario "{self.object.username}" creado. Credenciales enviadas por correo y WhatsApp.')
+        elif email_sent:
+            messages.warning(self.request, f'Usuario "{self.object.username}" creado. Credenciales enviadas por correo (WhatsApp no disponible por ahora).')
+        else:
+            messages.warning(self.request, f'Usuario "{self.object.username}" creado, pero no se pudo enviar las credenciales automáticamente.')
         return response
 
 
@@ -48,6 +110,46 @@ class SecurityLoginView(LoginView):
 
 class SecurityLogoutView(LogoutView):
     pass
+
+
+class RecoverCredentialsView(FormView):
+    form_class = RecoverCredentialsForm
+    template_name = 'security/recover_credentials.html'
+    success_url = reverse_lazy('security:login')
+
+    def form_valid(self, form):
+        email = form.cleaned_data['email']
+        channel = form.cleaned_data['channel']
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+
+        if user:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = (
+                f'{settings.SITE_URL}'
+                f'{reverse("password_reset_confirm", kwargs={"uidb64": uid, "token": token})}'
+            )
+            body = (
+                f'Estimado/a {_full_name(user)},\n\n'
+                f'Solicitó recuperar el acceso al Sistema de Ventas TecnoStock. '
+                f'Ingrese al siguiente enlace para restablecer su contraseña:\n\n'
+                f'{reset_url}\n\n'
+                f'Si usted no solicitó esto, ignore este mensaje.\n\n'
+                f'Atentamente,\n'
+                f'Administración — Sistema de Ventas TecnoStock'
+            )
+            if channel == 'whatsapp':
+                profile = getattr(user, 'profile', None)
+                if profile and profile.phone:
+                    send_whatsapp_message(profile.phone, body)
+                else:
+                    messages.error(self.request, 'Este usuario no tiene un número de WhatsApp registrado. Intenta con correo.')
+                    return self.render_to_response(self.get_context_data(form=form))
+            else:
+                send_credentials_email(user.email, 'Recuperación de Credenciales — Sistema de Ventas TecnoStock', body)
+
+        messages.success(self.request, 'Si los datos son correctos, te hemos enviado instrucciones para recuperar tu acceso.')
+        return super().form_valid(form)
 
 
 # === USUARIOS ===
@@ -110,11 +212,31 @@ def user_list(request):
     return render(request, 'security/user_list.html', context)
 
 
+class UserDetailView(AdminOnlyMixin, DetailView):
+    model = User
+    template_name = 'security/user_detail.html'
+    context_object_name = 'viewed_user'
+
+
 class UserUpdateView(AdminOnlyMixin, UpdateView):
     model = User
     form_class = UserUpdateForm
     template_name = 'security/user_form.html'
     success_url = reverse_lazy('security:user_list')
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+
+        subject, body = _account_updated_message(self.object)
+        email_sent = send_credentials_email(self.object.email, subject, body)
+        profile = getattr(self.object, 'profile', None)
+        whatsapp_sent = send_whatsapp_message(profile.phone if profile else '', body)
+
+        if email_sent or whatsapp_sent:
+            messages.success(self.request, f'Usuario "{self.object.username}" actualizado. Se notificó el cambio al usuario.')
+        else:
+            messages.success(self.request, f'Usuario "{self.object.username}" actualizado.')
+        return response
 
 
 class UserDeleteView(AdminOnlyMixin, DeleteView):
@@ -227,75 +349,105 @@ def translate_permission_name(name):
     return name
 
 
+ACTION_LABELS = {'view': 'Ver', 'add': 'Agregar', 'change': 'Editar', 'delete': 'Eliminar'}
+ACTION_ICONS = {'view': 'bi-eye', 'add': 'bi-plus-circle', 'change': 'bi-pencil', 'delete': 'bi-trash'}
+ACTION_ORDER = ['view', 'add', 'change', 'delete']
+
+
+def _permission_action(codename):
+    prefix = codename.split('_', 1)[0]
+    return prefix if prefix in ACTION_LABELS else None
+
+
 # === PERMISOS ===
 @admin_required
 def permission_list(request):
-    groups = Group.objects.all()
-    users = User.objects.filter(is_active=True)
+    groups = Group.objects.all().order_by('name')
+    all_users = User.objects.filter(is_active=True).order_by('username')
 
-    if request.method == 'POST':
-        permission_ids = request.POST.getlist('permission_ids')
-        group_ids = request.POST.getlist('group_ids')
-        user_ids = request.POST.getlist('user_ids')
-
-        # Update groups
-        for g_id in group_ids:
-            try:
-                group = Group.objects.get(id=g_id)
-                assigned_perms = set(group.permissions.filter(id__in=permission_ids).values_list('id', flat=True))
-                
-                submitted_perms = set()
-                for p_id in permission_ids:
-                    if f'role_{g_id}_{p_id}' in request.POST:
-                        submitted_perms.add(int(p_id))
-                
-                perms_to_add = submitted_perms - assigned_perms
-                if perms_to_add:
-                    group.permissions.add(*perms_to_add)
-                
-                perms_to_remove = assigned_perms - submitted_perms
-                if perms_to_remove:
-                    group.permissions.remove(*perms_to_remove)
-            except Group.DoesNotExist:
-                pass
-
-        # Update users
-        for u_id in user_ids:
-            try:
-                user = User.objects.get(id=u_id)
-                assigned_perms = set(user.user_permissions.filter(id__in=permission_ids).values_list('id', flat=True))
-                
-                submitted_perms = set()
-                for p_id in permission_ids:
-                    if f'user_{u_id}_{p_id}' in request.POST:
-                        submitted_perms.add(int(p_id))
-                
-                perms_to_add = submitted_perms - assigned_perms
-                if perms_to_add:
-                    user.user_permissions.add(*perms_to_add)
-                
-                perms_to_remove = assigned_perms - submitted_perms
-                if perms_to_remove:
-                    user.user_permissions.remove(*perms_to_remove)
-            except User.DoesNotExist:
-                pass
-
-        from django.contrib import messages
-        messages.success(request, 'Asignaciones de permisos guardadas correctamente.')
+    # Acción rápida: otorgar TODOS los permisos a un usuario
+    if request.method == 'POST' and request.POST.get('grant_all_user_id'):
+        try:
+            target_user = User.objects.get(id=request.POST['grant_all_user_id'])
+            target_user.user_permissions.set(Permission.objects.all())
+            messages.success(request, f'Se otorgaron todos los permisos a "{target_user.username}".')
+        except User.DoesNotExist:
+            messages.error(request, 'Usuario no encontrado.')
         return redirect(request.get_full_path())
 
-    query = request.GET.get('q', '')
-    export = request.GET.get('export', '')
+    # Guardar los permisos marcados para el rol/usuario seleccionado
+    if request.method == 'POST' and request.POST.get('target_type'):
+        target_type = request.POST.get('target_type')
+        target_id = request.POST.get('target_id')
+        submitted_ids = [int(pid) for pid in request.POST.getlist('perm_ids')]
 
-    items = Permission.objects.select_related('content_type').all()
+        if target_type == 'group':
+            target_obj = get_object_or_404(Group, id=target_id)
+            target_obj.permissions.set(submitted_ids)
+            messages.success(request, f'Permisos actualizados para el rol "{target_obj.name}".')
+        else:
+            target_obj = get_object_or_404(User, id=target_id)
+            target_obj.user_permissions.set(submitted_ids)
+            messages.success(request, f'Permisos actualizados para el usuario "{target_obj.username}".')
 
-    if query:
-        items = items.filter(
-            models.Q(name__icontains=query) |
-            models.Q(codename__icontains=query) |
-            models.Q(content_type__model__icontains=query)
+        return redirect(f"{reverse('security:permission_list')}?target_type={target_type}&target_id={target_id}")
+
+    user_q = request.GET.get('user_q', '')
+    target_type = request.GET.get('target_type', 'group')
+    target_id = request.GET.get('target_id', '')
+
+    filtered_users = all_users
+    if user_q:
+        filtered_users = filtered_users.filter(
+            models.Q(username__icontains=user_q) |
+            models.Q(first_name__icontains=user_q) |
+            models.Q(last_name__icontains=user_q)
         )
 
+    # Determinar el rol/usuario seleccionado (por defecto, el primer rol)
+    target = None
+    if target_type == 'user' and target_id:
+        target = User.objects.filter(id=target_id).first()
+    elif target_type == 'group' and target_id:
+        target = Group.objects.filter(id=target_id).first()
+    if target is None:
+        target = groups.first()
+        target_type = 'group'
+
+    assigned_ids = set()
+    if target is not None:
+        if target_type == 'group':
+            assigned_ids = set(target.permissions.values_list('id', flat=True))
+        else:
+            assigned_ids = set(target.user_permissions.values_list('id', flat=True))
+
+    # Armar los cuadros por modelo, cada uno con sus casillas Ver/Agregar/Editar/Eliminar
+    permissions = Permission.objects.select_related('content_type').order_by(
+        'content_type__app_label', 'content_type__model', 'codename'
+    )
+    model_cards = {}
+    for p in permissions:
+        ct = p.content_type
+        key = (ct.app_label, ct.model)
+        if key not in model_cards:
+            model_cards[key] = {
+                'label': MODEL_TRANSLATIONS.get(ct.model.lower(), ct.model).capitalize(),
+                'app_label': ct.app_label,
+                'items': [],
+            }
+        action = _permission_action(p.codename)
+        model_cards[key]['items'].append({
+            'id': p.id,
+            'label': ACTION_LABELS.get(action, translate_permission_name(p.name)),
+            'icon': ACTION_ICONS.get(action, 'bi-key'),
+            'order': ACTION_ORDER.index(action) if action in ACTION_ORDER else 99,
+            'checked': p.id in assigned_ids,
+        })
+    for card in model_cards.values():
+        card['items'].sort(key=lambda i: i['order'])
+    model_cards = dict(sorted(model_cards.items(), key=lambda kv: kv[1]['label']))
+
+    export = request.GET.get('export', '')
     if export in ('pdf', 'excel'):
         exporter = ExportMixin()
         exporter.export_filename = 'permisos'
@@ -306,44 +458,18 @@ def permission_list(request):
             for p in qs
         ]
         if export == 'pdf':
-            return exporter.export_to_pdf(items)
+            return exporter.export_to_pdf(permissions)
         else:
-            return exporter.export_to_excel(items)
-
-    page_obj = list(items)
-
-    # Optimización: Obtener relaciones de permisos para grupos y usuarios en una sola consulta
-    group_perms_dict = {}
-    for group_id, permission_id in Group.permissions.through.objects.values_list('group_id', 'permission_id'):
-        if group_id not in group_perms_dict:
-            group_perms_dict[group_id] = set()
-        group_perms_dict[group_id].add(permission_id)
-
-    user_perms_dict = {}
-    for user_id, permission_id in User.user_permissions.through.objects.values_list('user_id', 'permission_id'):
-        if user_id not in user_perms_dict:
-            user_perms_dict[user_id] = set()
-        user_perms_dict[user_id].add(permission_id)
-
-    # Anotar cada permiso en la página actual, traducir nombre y modelo
-    for p in page_obj:
-        p.translated_name = translate_permission_name(p.name)
-        p.translated_model = MODEL_TRANSLATIONS.get(p.content_type.model.lower(), p.content_type.model)
-        p.assigned_groups = []
-        for g in groups:
-            if p.id in group_perms_dict.get(g.id, set()):
-                p.assigned_groups.append(g.id)
-        
-        p.assigned_users = []
-        for u in users:
-            if p.id in user_perms_dict.get(u.id, set()):
-                p.assigned_users.append(u.id)
+            return exporter.export_to_excel(permissions)
 
     context = {
-        'page_obj': page_obj,
-        'query': query,
         'groups': groups,
-        'users': users,
+        'all_users': all_users,
+        'filtered_users': filtered_users,
+        'user_q': user_q,
+        'target_type': target_type,
+        'target': target,
+        'model_cards': model_cards,
     }
     return render(request, 'security/permission_list.html', context)
 

@@ -28,7 +28,10 @@ class Purchase(models.Model):
     ]
 
     def __str__(self):
-        return f'Purchase #{self.id} - {self.supplier}'
+        try:
+            return f'Purchase #{self.id} - {self.supplier}'
+        except:
+            return f'Purchase #{self.id}'
 
 
 class PurchaseDetail(models.Model):

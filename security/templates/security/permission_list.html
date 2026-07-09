@@ -1,25 +1,38 @@
 {% extends 'billing/base.html' %}
-{% block title %}Permisos - Matriz de Marcaje{% endblock %}
+{% block title %}Gestión de Permisos{% endblock %}
 
 {% block extra_css %}
 <style>
-  .user-col {
-    transition: all 0.2s ease;
-  }
-  .hide-users .user-col {
-    display: none !important;
-  }
-  /* Celdas interactivas para marcaje rápido */
-  #matrix-table td.matrix-cell {
+  .role-list .list-group-item {
     cursor: pointer;
+    border-left: 3px solid transparent;
+  }
+  .role-list .list-group-item.active {
+    background: #eef2ff;
+    border-left-color: #4f46e5;
+    color: #1e1b4b;
+    font-weight: 600;
+  }
+  .perm-card {
+    border-radius: 12px;
+    transition: box-shadow 0.15s ease;
+  }
+  .perm-card:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  }
+  .perm-card .card-header {
+    background: #f8fafc;
+    font-weight: 600;
+  }
+  .perm-check {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 8px;
+    padding: 6px 10px;
     transition: background-color 0.1s ease;
   }
-  #matrix-table td.matrix-cell:hover {
-    background-color: #eef2ff !important;
-  }
-  #matrix-table td.matrix-cell input[type="checkbox"] {
-    transform: scale(1.15);
-    cursor: pointer;
+  .perm-check:hover {
+    background-color: #f1f5f9;
   }
 </style>
 {% endblock %}
@@ -29,192 +42,137 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h2 class="mb-0">Gestión de Permisos</h2>
-    <p class="text-muted small mb-0">Asigne permisos directamente a roles y usuarios usando la tabla de marcaje.</p>
+    <p class="text-muted small mb-0">Elige un rol o usuario a la izquierda y marca sus permisos por módulo.</p>
   </div>
   <div class="d-flex gap-2">
+    <a href="{% url 'security:register' %}" class="btn btn-success"><i class="bi bi-person-plus-fill me-1"></i>Nuevo Usuario</a>
     <a href="{% url 'security:permission_create' %}" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Nuevo Permiso</a>
-    <button type="submit" form="filtros-form" name="export" value="pdf" class="btn btn-danger">PDF</button>
-    <button type="submit" form="filtros-form" name="export" value="excel" class="btn btn-success">Excel</button>
+    <a href="?export=pdf" class="btn btn-danger">PDF</a>
+    <a href="?export=excel" class="btn btn-success">Excel</a>
   </div>
 </div>
 
-<!-- Filtros de búsqueda -->
-<form method="get" id="filtros-form" class="mb-3">
-  <div class="d-flex align-items-center gap-2">
-    <div class="input-group" style="max-width:350px;">
-      <span class="input-group-text bg-white border-end-0">🔍</span>
-      <input type="text" name="q" value="{{ query }}" class="form-control border-start-0" placeholder="Nombre, codename o modelo...">
-    </div>
-    <button type="submit" class="btn btn-primary">Buscar</button>
-    {% if query %}
-      <a href="{% url 'security:permission_list' %}" class="btn btn-outline-secondary">✕ Limpiar</a>
-    {% endif %}
-  </div>
-</form>
-
-<!-- Panel de Control de Matriz -->
-<div class="card shadow-sm border-0 mb-3 bg-light">
-  <div class="card-body py-3 px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <div class="form-check form-switch mb-0">
-      <input class="form-check-input" type="checkbox" role="switch" id="toggleUsers" checked>
-      <label class="form-check-label fw-semibold text-secondary" for="toggleUsers">
-        <i class="bi bi-people-fill me-2"></i>Mostrar columnas de Usuarios
-      </label>
-    </div>
-    <button type="submit" form="matrix-form" class="btn btn-success">
-      <i class="bi bi-check-circle-fill me-2"></i>Guardar Cambios de la Matriz
-    </button>
-  </div>
-</div>
-
-<!-- Formulario de la Matriz -->
-<form method="post" id="matrix-form">
-  {% csrf_token %}
-  
-  <!-- Identificadores ocultos de los elementos presentes en esta página -->
-  {% for p in page_obj %}
-    <input type="hidden" name="permission_ids" value="{{ p.id }}">
-  {% endfor %}
-  {% for g in groups %}
-    <input type="hidden" name="group_ids" value="{{ g.id }}">
-  {% endfor %}
-  {% for u in users %}
-    <input type="hidden" name="user_ids" value="{{ u.id }}">
-  {% endfor %}
-
-  <div class="table-responsive shadow-sm rounded-4 bg-white border">
-    <table class="table table-hover align-middle mb-0" id="matrix-table">
-      <thead class="table-dark">
-        <tr>
-          <th style="min-width: 280px; padding: 15px;">Permiso (Nombre y Codename)</th>
-          <th style="min-width: 140px; padding: 15px;">Modelo</th>
-          <!-- Roles/Grupos -->
-          {% for g in groups %}
-            <th class="text-center" style="min-width: 130px; padding: 15px;">
-              <span class="badge bg-light text-dark border px-2 py-1.5 fs-7"><i class="bi bi-shield-check text-primary me-1"></i>{{ g.name }}</span>
-            </th>
-          {% endfor %}
-          <!-- Usuarios -->
-          {% for u in users %}
-            <th class="text-center user-col" style="min-width: 130px; padding: 15px;">
-              <span class="badge bg-light text-dark border px-2 py-1.5 fs-7"><i class="bi bi-person text-info me-1"></i>{{ u.username }}</span>
-            </th>
-          {% endfor %}
-          <th class="text-center" style="min-width: 120px; padding: 15px;">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in page_obj %}
-        <tr>
-          <td style="padding: 12px 15px;">
-            <div class="fw-semibold text-dark">{{ p.translated_name }}</div>
-            <small class="text-muted"><code>{{ p.codename }}</code></small>
-          </td>
-          <td style="padding: 12px 15px;">
-            <span class="badge bg-light text-secondary border px-2 py-1">{{ p.translated_model|title }}</span>
-          </td>
-          
-          <!-- Checkboxes de Roles -->
-          {% for g in groups %}
-            <td class="text-center matrix-cell" style="padding: 12px 15px;">
-              <input type="checkbox" class="form-check-input" 
-                     name="role_{{ g.id }}_{{ p.id }}" 
-                     {% if g.id in p.assigned_groups %}checked{% endif %}>
-            </td>
-          {% endfor %}
-          
-          <!-- Checkboxes de Usuarios -->
-          {% for u in users %}
-            <td class="text-center matrix-cell user-col" style="padding: 12px 15px;">
-              <input type="checkbox" class="form-check-input" 
-                     name="user_{{ u.id }}_{{ p.id }}" 
-                     {% if u.id in p.assigned_users %}checked{% endif %}>
-            </td>
-          {% endfor %}
-          
-          <td class="text-center" style="padding: 12px 15px;">
-            <div class="btn-group">
-              <a href="{% url 'security:permission_update' p.pk %}" class="btn btn-sm btn-outline-warning" title="Editar definición">
-                <i class="bi bi-pencil-fill"></i>
-              </a>
-              <a href="{% url 'security:permission_delete' p.pk %}" class="btn btn-sm btn-outline-danger" title="Eliminar definición">
-                <i class="bi bi-trash-fill"></i>
-              </a>
-            </div>
-          </td>
-        </tr>
+<div class="row g-3">
+  <!-- IZQUIERDA: Roles y Usuarios -->
+  <div class="col-lg-3">
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header bg-white fw-bold"><i class="bi bi-shield-check text-primary me-1"></i>Roles</div>
+      <div class="list-group list-group-flush role-list">
+        {% for g in groups %}
+          <a href="?target_type=group&target_id={{ g.id }}" class="list-group-item list-group-item-action {% if target_type == 'group' and target.id == g.id %}active{% endif %}">
+            {{ g.name }}
+          </a>
         {% empty %}
-        <tr>
-          <td colspan="20" class="text-center text-muted py-5">
-            <i class="bi bi-exclamation-circle fs-3 mb-2 d-block"></i>
-            No se encontraron permisos.
-          </td>
-        </tr>
+          <div class="list-group-item text-muted small">No hay roles creados.</div>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white fw-bold"><i class="bi bi-person text-info me-1"></i>Usuarios</div>
+      <div class="card-body pb-2">
+        <form method="get" class="d-flex gap-1">
+          <input type="text" name="user_q" value="{{ user_q }}" class="form-control form-control-sm" placeholder="Buscar usuario...">
+          <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
+        </form>
+      </div>
+      <div class="list-group list-group-flush role-list" style="max-height:320px; overflow-y:auto;">
+        {% for u in filtered_users %}
+          <a href="?target_type=user&target_id={{ u.id }}&user_q={{ user_q }}" class="list-group-item list-group-item-action {% if target_type == 'user' and target.id == u.id %}active{% endif %}">
+            {{ u.username }}
+          </a>
+        {% empty %}
+          <div class="list-group-item text-muted small">Sin resultados.</div>
+        {% endfor %}
+      </div>
+    </div>
   </div>
 
-  <!-- Botón inferior para guardar -->
-  {% if page_obj %}
-  <div class="d-flex justify-content-end gap-2 mt-4">
-    <button type="submit" class="btn btn-success px-4 py-2">
-      <i class="bi bi-check-circle-fill me-2"></i>Guardar Cambios de la Matriz
-    </button>
-  </div>
-  {% endif %}
-</form>
+  <!-- DERECHA: Cuadros por modelo -->
+  <div class="col-lg-9">
+    {% if target %}
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+          <span class="badge {% if target_type == 'group' %}bg-primary{% else %}bg-info{% endif %} fs-6">
+            <i class="bi {% if target_type == 'group' %}bi-shield-check{% else %}bi-person-fill{% endif %} me-1"></i>
+            {% if target_type == 'group' %}Rol: {{ target.name }}{% else %}Usuario: {{ target.username }}{% endif %}
+          </span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <input type="text" id="model-filter" class="form-control form-control-sm" style="max-width:220px;" placeholder="Buscar módulo...">
+          {% if target_type == 'user' %}
+          <form method="post" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="grant_all_user_id" value="{{ target.id }}">
+            <button type="submit" class="btn btn-sm btn-warning"
+                    onclick="return confirm('¿Dar TODOS los permisos del sistema a &quot;{{ target.username }}&quot;?');">
+              <i class="bi bi-unlock-fill me-1"></i>Dar acceso a todos los permisos
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
 
-<!-- Paginación -->
-{% if page_obj.has_other_pages %}
-<nav class="d-flex justify-content-center mt-4">
-  <ul class="pagination">
-    {% if page_obj.has_previous %}
-      <li class="page-item"><a class="page-link" href="?page=1&q={{ query }}">&laquo; Primera</a></li>
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}">Anterior</a></li>
+      <form method="post" id="perm-form">
+        {% csrf_token %}
+        <input type="hidden" name="target_type" value="{{ target_type }}">
+        <input type="hidden" name="target_id" value="{{ target.id }}">
+
+        <div class="row g-3" id="model-cards">
+          {% for key, card in model_cards.items %}
+          <div class="col-md-6 col-xl-4 model-card-wrapper" data-model-label="{{ card.label|lower }}">
+            <div class="card perm-card shadow-sm h-100">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span>{{ card.label }}</span>
+                <span class="badge bg-light text-secondary border">{{ card.app_label }}</span>
+              </div>
+              <div class="card-body py-2">
+                {% for item in card.items %}
+                  <label class="perm-check d-flex align-items-center gap-2 mb-1">
+                    <input type="checkbox" class="form-check-input" name="perm_ids" value="{{ item.id }}" {% if item.checked %}checked{% endif %}>
+                    <i class="bi {{ item.icon }} text-muted"></i>
+                    <span>{{ item.label }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="col-12 text-center text-muted py-5">
+            <i class="bi bi-exclamation-circle fs-3 mb-2 d-block"></i>
+            No hay permisos definidos.
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="d-flex justify-content-end mt-3">
+          <button type="submit" class="btn btn-success px-4 py-2">
+            <i class="bi bi-check-circle-fill me-2"></i>Guardar Cambios
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-arrow-left-circle fs-3 mb-2 d-block"></i>
+        Elige un rol o usuario a la izquierda para ver y editar sus permisos.
+      </div>
     {% endif %}
-    <li class="page-item active"><span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
-    {% if page_obj.has_next %}
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}">Siguiente</a></li>
-      <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&q={{ query }}">Última &raquo;</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+  </div>
+</div>
 
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  // Control de Mostrar/Ocultar columnas de usuarios
-  const toggle = document.getElementById('toggleUsers');
-  const table = document.getElementById('matrix-table');
-  
-  function updateColumns() {
-    if (toggle.checked) {
-      table.classList.remove('hide-users');
-    } else {
-      table.classList.add('hide-users');
-    }
-    localStorage.setItem('show_user_permission_cols', toggle.checked ? '1' : '0');
-  }
-  
-  const savedPref = localStorage.getItem('show_user_permission_cols');
-  if (savedPref !== null) {
-    toggle.checked = savedPref === '1';
-  }
-  updateColumns();
-  
-  toggle.addEventListener('change', updateColumns);
-
-  // Permitir marcar casillas haciendo clic en toda la celda
-  document.querySelectorAll('#matrix-table td.matrix-cell').forEach(td => {
-    td.addEventListener('click', function(e) {
-      const chk = this.querySelector('input[type="checkbox"]');
-      if (chk && e.target !== chk) {
-        chk.checked = !chk.checked;
-      }
+  const modelFilter = document.getElementById('model-filter');
+  if (modelFilter) {
+    modelFilter.addEventListener('input', function() {
+      const term = this.value.trim().toLowerCase();
+      document.querySelectorAll('.model-card-wrapper').forEach(function(card) {
+        const label = card.getAttribute('data-model-label');
+        card.style.display = label.includes(term) ? '' : 'none';
+      });
     });
-  });
+  }
 </script>
 {% endblock %}

@@ -96,7 +96,6 @@
 <table class="table table-striped table-hover">
   <thead class="table-dark">
     <tr>
-      <th>Margen</th>
       <th>Imagen</th>
       <th>Nombre</th>
       <th>Marca</th>
@@ -112,20 +111,11 @@
   <tbody>
     {% for item in page_obj %}
     <tr>
-      <td class="text-center">
-  {% if item.margin %}
-    <span class="badge {% if item.margin > 20 %}bg-success{% elif item.margin > 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
-      {{ item.margin }}%
-    </span>
-  {% else %}
-    <span class="text-muted">-</span>
-  {% endif %}
-</td>
       <td>
         {% if item.image %}
           <img src="{{ item.image.url }}" alt="{{ item.name }}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">
         {% else %}
-          <img src="{{ MEDIA_URL }}no-image.png" alt="Sin imagen" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">
+          <img src="{{ item.placeholder_image }}" alt="{{ item.name }}" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">
         {% endif %}
       </td>
       <td>{{ item.name }}</td>

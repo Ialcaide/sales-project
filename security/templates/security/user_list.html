@@ -80,6 +80,7 @@
         {% endif %}
       </td>
       <td>
+        <a href="{% url 'security:user_detail' u.pk %}" class="btn btn-sm btn-info">Ver</a>
         <a href="{% url 'security:user_update' u.pk %}" class="btn btn-sm btn-warning">Editar</a>
         <a href="{% url 'security:user_delete' u.pk %}" class="btn btn-sm btn-danger">Borrar</a>
       </td>

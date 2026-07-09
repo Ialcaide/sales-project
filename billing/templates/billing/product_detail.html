@@ -11,7 +11,7 @@
       {% if product.image %}
   <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
 {% else %}
-  <img src="{{ MEDIA_URL }}no-image.png" alt="Sin imagen" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
+  <img src="{{ product.placeholder_image }}" alt="{{ product.name }}" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
 {% endif %}
       </div>
       <div class="col-md-7">
@@ -57,18 +57,6 @@
       ${{ product.last_cost }}
     {% else %}
       <span class="text-muted">Sin compras registradas</span>
-    {% endif %}
-  </td>
-</tr>
-<tr>
-  <th>Margen de ganancia</th>
-  <td>
-    {% if product.margin %}
-      <span class="badge {% if product.margin > 20 %}bg-success{% elif product.margin > 0 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
-        {{ product.margin }}%
-      </span>
-    {% else %}
-      <span class="text-muted">Sin datos de costo</span>
     {% endif %}
   </td>
 </tr>

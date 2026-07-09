@@ -15,9 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve as static_serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,4 +26,8 @@ urlpatterns = [
     path('purchases/', include('purchasing.urls')),
     path('', include('home.urls')),   # home primero
     path('', include('billing.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # django.conf.urls.static.static() solo sirve MEDIA cuando DEBUG=True;
+    # se sirve explícito aquí para que las imágenes de producto también
+    # funcionen en producción (Render).
+    re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
+]

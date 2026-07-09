@@ -1,5 +1,17 @@
 {% extends 'billing/base.html' %}
 {% block title %}{{ title }}{% endblock %}
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<style>
+.select2-container .select2-selection--single { height: 44px !important; border: 1.5px solid #c7d2fe !important; border-radius: 10px !important; }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 42px !important; padding-left: 12px !important; color: #334155 !important; }
+.select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px !important; }
+.select2-dropdown { border: 1.5px solid #c7d2fe !important; border-radius: 10px !important; box-shadow: 0 8px 24px rgba(78,84,200,0.10) !important; }
+.select2-container--default .select2-results__option--highlighted { background-color: #4e54c8 !important; }
+.select2-search__field { border-radius: 8px !important; border: 1.5px solid #c7d2fe !important; padding: 6px 10px !important; }
+.select2-container { width: 100% !important; }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="card shadow border-0 mb-4">
@@ -77,7 +89,7 @@
                 <td>
                   {{ detail_form.id }}
                   <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
-                    <option value="">---------</option>
+                    <option value="">Buscar producto...</option>
                     {% for p in detail_form.product.field.queryset %}
                       <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
                     {% endfor %}
@@ -131,6 +143,11 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 const PRODUCTS = {{ products_json|safe }};
 const CUSTOMERS = {{ customers_json|safe }};
@@ -154,7 +171,6 @@ document.getElementById('id_customer').addEventListener('change', function() {
   }
 });
 
-// Calcular subtotal de una fila
 function calcRow(row) {
   const qty = parseFloat(row.querySelector('.quantity-input').value) || 0;
   const price = parseFloat(row.querySelector('.price-input').value) || 0;
@@ -163,7 +179,6 @@ function calcRow(row) {
   return sub;
 }
 
-// Calcular totales
 function calcTotals() {
   let subtotal = 0;
   document.querySelectorAll('.detail-row').forEach(row => {
@@ -176,14 +191,16 @@ function calcTotals() {
   document.getElementById('summary-total').textContent = '$' + total.toFixed(2);
 }
 
-// Evento en select de producto
-function bindProductSelect(row) {
-  const sel = row.querySelector('.product-select');
-  const priceInput = row.querySelector('.price-input');
-  const stockInfo = row.querySelector('.stock-info');
-
-  sel.addEventListener('change', function() {
-    const pid = this.value;
+function initSelect2(sel) {
+  $(sel).select2({
+    placeholder: 'Escribe para buscar producto...',
+    allowClear: true,
+    width: '100%'
+  }).on('change', function() {
+    const pid = $(this).val();
+    const row = $(this).closest('tr')[0];
+    const priceInput = row.querySelector('.price-input');
+    const stockInfo = row.querySelector('.stock-info');
     if (pid && PRODUCTS[pid]) {
       priceInput.value = PRODUCTS[pid].price.toFixed(2);
       stockInfo.textContent = 'Stock disponible: ' + PRODUCTS[pid].stock;
@@ -193,11 +210,14 @@ function bindProductSelect(row) {
     }
     calcTotals();
   });
+}
+
+function bindProductSelect(row) {
+  const sel = row.querySelector('.product-select');
+  initSelect2(sel);
 
   row.querySelector('.quantity-input').addEventListener('input', function() {
-    if (this.value < 1 || this.value === '') {
-      this.value = 1;
-    }
+    if (this.value < 1 || this.value === '') this.value = 1;
     calcTotals();
   });
 
@@ -207,24 +227,19 @@ function bindProductSelect(row) {
   });
 }
 
-// Inicializar filas existentes
 document.querySelectorAll('.detail-row').forEach(row => bindProductSelect(row));
 calcTotals();
 
-// Agregar fila nueva
 document.getElementById('add-row').addEventListener('click', function() {
   const tbody = document.getElementById('formset-body');
   const row = document.createElement('tr');
   row.className = 'detail-row';
-  let options = '<option value="">---------</option>';
-  for (const [id, p] of Object.entries(PRODUCTS)) {
-    options += `<option value="${id}">${p.name}</option>`;
-  }
   row.innerHTML = `
     <td>
       <input type="hidden" name="details-${formIndex}-id" value="">
       <select name="details-${formIndex}-product" class="form-select product-select">
-        ${options}
+        <option value="">Escribe para buscar producto...</option>
+        ${Object.entries(PRODUCTS).map(([id,p]) => `<option value="${id}">${p.name}</option>`).join('')}
       </select>
       <small class="text-muted stock-info"></small>
     </td>
@@ -238,5 +253,4 @@ document.getElementById('add-row').addEventListener('click', function() {
   document.getElementById('id_details-TOTAL_FORMS').value = ++formIndex;
 });
 </script>
-
 {% endblock %}

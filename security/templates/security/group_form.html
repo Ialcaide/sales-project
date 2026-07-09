@@ -14,7 +14,8 @@
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Permisos</label>
-            <div class="border rounded p-2" style="max-height:300px; overflow-y:auto;">
+            <input type="text" id="permission-filter" class="form-control mb-2" placeholder="Filtrar permisos...">
+            <div class="border rounded p-2" id="permission-list" style="max-height:300px; overflow-y:auto;">
               {{ form.permissions }}
             </div>
           </div>
@@ -25,4 +26,13 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.getElementById('permission-filter').addEventListener('input', function() {
+    const term = this.value.trim().toLowerCase();
+    document.querySelectorAll('#permission-list li').forEach(function(li) {
+      li.style.display = li.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+</script>
 {% endblock %}

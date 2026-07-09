@@ -10,6 +10,17 @@ import os
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Carga variables desde un .env local (no versionado) sin pisar variables de
+# entorno reales del sistema/servidor (Render las define en su dashboard).
+_env_path = BASE_DIR / '.env'
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding='utf-8').splitlines():
+        _line = _line.strip()
+        if not _line or _line.startswith('#') or '=' not in _line:
+            continue
+        _key, _, _value = _line.partition('=')
+        os.environ.setdefault(_key.strip(), _value.strip())
+
 # =====================================================
 # SEGURIDAD
 # =====================================================
@@ -163,6 +174,43 @@ MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# URL pública del sistema, usada en los correos/WhatsApp de credenciales para
+# que el enlace siempre apunte al sitio real, sin importar desde dónde el
+# administrador esté operando (local o producción).
+SITE_URL = os.environ.get('SITE_URL', 'https://sales-project-dxoy.onrender.com')
+
+# =====================================================
+# EMAIL (Gmail SMTP)
+# =====================================================
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# =====================================================
+# WHATSAPP (Twilio)
+# =====================================================
+# TWILIO_WHATSAPP_FROM debe incluir el prefijo 'whatsapp:', ej: 'whatsapp:+14155238886'
+
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
+TWILIO_WHATSAPP_FROM = os.environ.get('TWILIO_WHATSAPP_FROM', '')
+
+# =====================================================
+# MESSAGES
+# =====================================================
+# Bootstrap 5 only defines .alert-danger, not .alert-error (Django's
+# default tag for messages.error()), so without this remap error
+# messages render with no styling and are effectively invisible.
+from django.contrib.messages import constants as message_constants
+MESSAGE_TAGS = {
+    message_constants.ERROR: 'danger',
+}
 
 # =====================================================
 # DEFAULT AUTO FIELD

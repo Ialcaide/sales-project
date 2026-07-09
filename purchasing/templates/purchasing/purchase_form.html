@@ -2,141 +2,162 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 
-<div class="row justify-content-center">
-  <div class="col-md-10">
-    <div class="card shadow">
-      <div class="card-header py-3">
-        <h5 class="mb-0"><i class="bi bi-cart me-2"></i>{{ title }}</h5>
+<div class="card shadow border-0 mb-4">
+  <div class="card-header bg-primary text-white fw-bold fs-5">
+    {{ title }}
+  </div>
+  <div class="card-body p-4">
+    <form method="post" id="purchase-form">
+      {% csrf_token %}
+      {{ formset.management_form }}
+
+      <div class="card mb-4 border">
+        <div class="card-header bg-light fw-bold">Información de la Compra</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Proveedor</label>
+              {{ form.supplier }}
+              {% for error in form.supplier.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">N° Documento del Proveedor</label>
+              {{ form.document_number }}
+              {% for error in form.document_number.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="card-body p-4">
-        <form method="post">
-          {% csrf_token %}
-          {{ formset.management_form }}
 
-          <div class="card mb-4 border">
-            <div class="card-header bg-light fw-bold">Información de la Compra</div>
-            <div class="card-body">
-              <div class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label fw-semibold">{{ form.supplier.label }}</label>
-                  {{ form.supplier }}
-                  {% for error in form.supplier.errors %}
-                    <div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
-                  {% endfor %}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label fw-semibold">{{ form.document_number.label }}</label>
-                  {{ form.document_number }}
-                  {% for error in form.document_number.errors %}
-                    <div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
-                  {% endfor %}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card mb-4 border">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-              <span class="fw-bold">Detalle de la Compra</span>
-              <button type="button" class="btn btn-sm btn-success" id="add-row">
-                <i class="bi bi-plus-circle me-1"></i>Agregar Producto
-              </button>
-            </div>
-            <div class="card-body p-0">
-              <table class="table table-bordered mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th>Producto</th>
-                    <th style="width:120px;">Cantidad</th>
-                    <th style="width:150px;">Costo Unitario ($)</th>
-                    <th style="width:120px;">Subtotal</th>
-                    <th style="width:60px;">Eliminar</th>
-                  </tr>
-                </thead>
-                <tbody id="formset-body">
-                  {% for detail_form in formset %}
-                  <tr class="detail-row">
-                    <td>
-                      {{ detail_form.id }}
-                      <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
-                        <option value="">---------</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input type="number" name="{{ detail_form.quantity.html_name }}" class="form-control quantity-input" value="{{ detail_form.quantity.value|default:1 }}" min="1">
-                    </td>
-                    <td>
-                      <input type="number" name="{{ detail_form.unit_cost.html_name }}" class="form-control cost-input" value="{{ detail_form.unit_cost.value|default:'' }}" step="0.01">
-                    </td>
-                    <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-                    <td class="text-center align-middle">
-                      {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
-                      <button type="button" class="btn btn-sm btn-danger remove-row"><i class="bi bi-trash"></i></button>
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="d-flex justify-content-end mb-4">
-            <div class="card border" style="min-width:280px;">
-              <div class="card-body">
-                <div class="d-flex justify-content-between mb-2">
-                  <span>Subtotal:</span>
-                  <span id="summary-subtotal" class="fw-bold">$0.00</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                  <span>IVA (15%):</span>
-                  <span id="summary-tax" class="fw-bold">$0.00</span>
-                </div>
-                <hr>
-                <div class="d-flex justify-content-between fs-5">
-                  <span class="fw-bold">Total:</span>
-                  <span id="summary-total" class="fw-bold text-success">$0.00</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="d-flex gap-2 mt-3">
-            <button type="submit" class="btn btn-primary w-100">
-              <i class="bi bi-check-circle me-1"></i>Guardar Compra
-            </button>
-            <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-secondary w-100">
-              <i class="bi bi-x-circle me-1"></i>Cancelar
-            </a>
-          </div>
-        </form>
+      <div class="card mb-4 border">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <span class="fw-bold">Detalle de la Compra</span>
+          <button type="button" class="btn btn-sm btn-success" id="add-row">
+            <i class="bi bi-plus-circle me-1"></i>Agregar Producto
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Producto</th>
+                <th style="width:120px;">Cantidad</th>
+                <th style="width:150px;">Costo Unitario ($)</th>
+                <th style="width:120px;">Subtotal</th>
+                <th style="width:60px;">Eliminar</th>
+              </tr>
+            </thead>
+            <tbody id="formset-body">
+              {% for detail_form in formset %}
+              <tr class="detail-row">
+                <td>
+                  {{ detail_form.id }}
+                  <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
+                    <option value="">---------</option>
+                    {% for p in detail_form.product.field.queryset %}
+                      <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <small class="text-muted stock-info"></small>
+                </td>
+                <td>
+                  <input type="number" name="{{ detail_form.quantity.html_name }}"
+                    class="form-control quantity-input"
+                    value="{{ detail_form.quantity.value|default:1 }}" min="1">
+                </td>
+                <td>
+                  <input type="number" name="{{ detail_form.unit_cost.html_name }}"
+                    class="form-control cost-input"
+                    value="{{ detail_form.unit_cost.value|default:'' }}" step="0.01" min="0.01">
+                </td>
+                <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
+                <td class="text-center align-middle">
+                  {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
+                  <button type="button" class="btn btn-sm btn-danger remove-row">✕</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <div class="d-flex justify-content-end mb-4">
+        <div class="card border" style="min-width:280px;">
+          <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+              <span>Subtotal:</span>
+              <span id="summary-subtotal" class="fw-bold">$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span>IVA (15%):</span>
+              <span id="summary-tax" class="fw-bold">$0.00</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between fs-5">
+              <span class="fw-bold">Total:</span>
+              <span id="summary-total" class="fw-bold text-success">$0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2">
+        <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
+        <button type="submit" class="btn btn-primary px-4 fw-bold">Guardar Compra</button>
+      </div>
+    </form>
   </div>
 </div>
 
 {% endblock %}
+
 {% block extra_js %}
 <script>
 const SUPPLIERS_PRODUCTS = {{ suppliers_products_json|safe }};
 let formIndex = {{ formset.total_form_count }};
 
-function fillProducts(selectElement, selectedId) {
-  const supplierId = document.getElementById('id_supplier').value;
+// Filtrar productos por proveedor (solo visual)
+function filterProducts(selectElement, supplierId) {
   const products = SUPPLIERS_PRODUCTS[supplierId] || [];
-  selectElement.innerHTML = '<option value="">---------</option>';
-  products.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.name;
-    if (selectedId && p.id == selectedId) opt.selected = true;
-    selectElement.appendChild(opt);
+  const currentVal = selectElement.value;
+  
+  // Ocultar/mostrar opciones según proveedor
+  Array.from(selectElement.options).forEach(opt => {
+    if (opt.value === '') return;
+    if (!supplierId || products.find(p => p.id == opt.value)) {
+      opt.style.display = '';
+    } else {
+      opt.style.display = 'none';
+    }
   });
+
+  // Si el valor actual no pertenece al proveedor, resetear
+  if (supplierId && currentVal && !products.find(p => p.id == currentVal)) {
+    selectElement.value = '';
+  }
 }
 
+// Cuando cambia el proveedor
 document.getElementById('id_supplier').addEventListener('change', function() {
-  document.querySelectorAll('.product-select').forEach(sel => fillProducts(sel, null));
+  const supplierId = this.value;
+  document.querySelectorAll('.product-select').forEach(sel => {
+    filterProducts(sel, supplierId);
+  });
   calcTotals();
 });
+
+// Inicializar filtro con proveedor actual
+const initialSupplier = document.getElementById('id_supplier').value;
+if (initialSupplier) {
+  document.querySelectorAll('.product-select').forEach(sel => {
+    filterProducts(sel, initialSupplier);
+  });
+}
 
 function calcRow(row) {
   const qty = parseFloat(row.querySelector('.quantity-input').value) || 0;
@@ -163,34 +184,50 @@ function bindRow(row) {
   row.querySelector('.cost-input').addEventListener('input', calcTotals);
   row.querySelector('.remove-row').addEventListener('click', function() {
     row.remove();
+    document.getElementById('id_details-TOTAL_FORMS').value = document.querySelectorAll('.detail-row').length;
     calcTotals();
   });
 }
 
-document.querySelectorAll('.detail-row').forEach(row => {
-  fillProducts(row.querySelector('.product-select'), null);
-  bindRow(row);
-});
+// Inicializar filas existentes
+document.querySelectorAll('.detail-row').forEach(row => bindRow(row));
 calcTotals();
 
+// Agregar fila nueva
 document.getElementById('add-row').addEventListener('click', function() {
   const tbody = document.getElementById('formset-body');
+  const supplierId = document.getElementById('id_supplier').value;
+  const products = supplierId ? (SUPPLIERS_PRODUCTS[supplierId] || []) : 
+    Object.values(SUPPLIERS_PRODUCTS).flat();
+
+  // Obtener todas las opciones de productos del primer select
+  const firstSelect = document.querySelector('.product-select');
+  let optionsHtml = '<option value="">---------</option>';
+  if (firstSelect) {
+    Array.from(firstSelect.options).forEach(opt => {
+      if (opt.value) {
+        optionsHtml += `<option value="${opt.value}">${opt.text}</option>`;
+      }
+    });
+  }
+
   const row = document.createElement('tr');
   row.className = 'detail-row';
   row.innerHTML = `
     <td>
       <input type="hidden" name="details-${formIndex}-id" value="">
       <select name="details-${formIndex}-product" class="form-select product-select">
-        <option value="">---------</option>
+        ${optionsHtml}
       </select>
+      <small class="text-muted stock-info"></small>
     </td>
     <td><input type="number" name="details-${formIndex}-quantity" class="form-control quantity-input" value="1" min="1"></td>
-    <td><input type="number" name="details-${formIndex}-unit_cost" class="form-control cost-input" step="0.01"></td>
+    <td><input type="number" name="details-${formIndex}-unit_cost" class="form-control cost-input" step="0.01" min="0.01"></td>
     <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger remove-row"><i class="bi bi-trash"></i></button></td>
+    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger remove-row">✕</button></td>
   `;
   tbody.appendChild(row);
-  fillProducts(row.querySelector('.product-select'), null);
+  filterProducts(row.querySelector('.product-select'), supplierId);
   bindRow(row);
   document.getElementById('id_details-TOTAL_FORMS').value = ++formIndex;
 });

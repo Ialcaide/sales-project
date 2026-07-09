@@ -15,6 +15,8 @@ ROLES = {
         'view_productgroup', 'add_productgroup', 'change_productgroup', 'delete_productgroup',
         'view_supplier', 'add_supplier', 'change_supplier', 'delete_supplier',
         'view_product', 'add_product', 'change_product', 'delete_product',
+        'view_purchase', 'add_purchase', 'change_purchase', 'delete_purchase',
+        'view_purchasedetail', 'add_purchasedetail', 'change_purchasedetail',
     ],
 }
 

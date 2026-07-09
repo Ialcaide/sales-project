@@ -35,3 +35,25 @@ class GroupRequiredMixin:
             return super().dispatch(request, *args, **kwargs)
         messages.error(request, self.group_error_message)
         return redirect(self.group_redirect_url)
+
+
+class PermissionRequiredRedirectMixin:
+    """
+    Mixin que verifica el permiso Django real (has_perm) del usuario,
+    ligado a los roles gestionados en Seguridad > Gestión de Permisos.
+    Si no tiene el permiso, redirige con mensaje en vez del 403 crudo.
+    """
+    permission_required = None
+    permission_redirect_url = '/'
+    permission_error_message = 'No tienes permiso para realizar esta acción.'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('login')
+        perms = self.permission_required
+        if isinstance(perms, str):
+            perms = (perms,)
+        if request.user.has_perms(perms):
+            return super().dispatch(request, *args, **kwargs)
+        messages.error(request, self.permission_error_message)
+        return redirect(self.permission_redirect_url)

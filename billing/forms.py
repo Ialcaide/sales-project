@@ -48,7 +48,7 @@ InvoiceDetailFormSet = inlineformset_factory(
     Invoice,
     InvoiceDetail,
     fields=['product', 'quantity', 'unit_price'],
-    extra=3,
+    extra=1,
     can_delete=True,
     widgets={
         'product': forms.Select(attrs={'class': 'form-select'}),

@@ -1,8 +1,29 @@
 import logging
 from functools import wraps
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect
 from django.utils import timezone
 
 logger = logging.getLogger('audit')
+
+
+def permission_required_redirect(perm, redirect_url='/'):
+    """
+    Decorador que exige el permiso Django real (has_perm) del usuario,
+    ligado a los roles gestionados en Seguridad > Gestión de Permisos.
+    Mismo patrón que admin_required pero parametrizado por permiso.
+    """
+    def decorator(view_func):
+        @login_required
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if request.user.has_perm(perm):
+                return view_func(request, *args, **kwargs)
+            messages.error(request, 'No tienes permiso para realizar esta acción.')
+            return redirect(redirect_url)
+        return wrapper
+    return decorator
 
 
 def audit_action(action_name):

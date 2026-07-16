@@ -135,17 +135,39 @@ def _generar_firmar_y_enviar(session: Session, comprobante: ComprobanteElectroni
 
 def procesar_comprobante(session: Session, payload: dict) -> ComprobanteElectronico:
     """Punto de entrada de POST /api/comprobantes/. Idempotente por
-    referencia_externa: si el cliente reenvía el mismo pedido (reintento de
-    red, doble clic), esto NO genera un segundo comprobante ni quema un
-    segundo secuencial — devuelve el que ya existe tal cual está."""
+    referencia_externa con manejo inteligente de estados:
+    - Si ya existe y está AUTORIZADO, EN_PROCESO o FIRMADO → lo devuelve tal cual
+      (no quema un segundo secuencial ni vuelve a enviar innecesariamente).
+    - Si ya existe pero está DEVUELTA o ERROR → reintenta el flujo completo de
+      firma y envío con los datos actuales del payload (ej. fecha de hoy),
+      reutilizando el mismo comprobante/secuencial/clave de acceso ya reservados.
+    - Si no existe → crea uno nuevo desde cero."""
+    ESTADOS_DEFINITIVOS_OK = {
+        ComprobanteElectronico.AUTORIZADO,
+        ComprobanteElectronico.EN_PROCESO,
+        ComprobanteElectronico.RECIBIDA,
+        ComprobanteElectronico.FIRMADO,
+        ComprobanteElectronico.ENVIADO,
+    }
     existente = session.exec(
         select(ComprobanteElectronico).where(ComprobanteElectronico.referencia_externa == payload['referencia_externa']),
     ).first()
     if existente is not None:
-        return existente
+        if existente.estado in ESTADOS_DEFINITIVOS_OK:
+            # Ya está en un estado que no requiere reintento — devolver tal cual.
+            return existente
+        # Estado DEVUELTA o ERROR: reintentar el envío con el payload actual
+        # (que trae fecha_emision = hoy desde el cliente Django) reutilizando
+        # el mismo comprobante ya reservado en BD.
+        logger.info(
+            'Reintentando comprobante %s (estado anterior: %s)',
+            existente.referencia_externa, existente.estado,
+        )
+        return _generar_firmar_y_enviar(session, existente, payload)
 
     comprobante = _reservar_comprobante(session, payload)
     return _generar_firmar_y_enviar(session, comprobante, payload)
+
 
 
 def obtener_por_clave(session: Session, clave_acceso: str) -> ComprobanteElectronico | None:

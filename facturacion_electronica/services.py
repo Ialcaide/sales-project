@@ -12,6 +12,7 @@ igual, sin ningún cambio de su lado.
 caído, mal configurado, tarda demasiado) no debe revertir ni bloquear la
 venta ya completada.
 """
+import datetime
 import logging
 
 import requests
@@ -98,7 +99,12 @@ def _payload_desde_invoice(invoice, config):
 
     return {
         'referencia_externa': f'billing.invoice:{invoice.id}',
-        'fecha_emision': invoice.invoice_date.date().isoformat(),
+        # Se usa la fecha ACTUAL (hoy) en lugar de invoice.invoice_date porque
+        # el SRI exige que el comprobante electrónico se emita el mismo día en
+        # que se envía al web service (error 65: FECHA EMISIÓN EXTEMPORÁNEA si
+        # la fecha es de un día anterior). La fecha impresa en el RIDE sigue
+        # siendo la fecha original de la factura en billing.Invoice.
+        'fecha_emision': datetime.date.today().isoformat(),
         'emisor': {
             'ruc': config.empresa_ruc,
             'razon_social': config.empresa_nombre,

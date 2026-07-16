@@ -251,7 +251,7 @@ PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')  # 'sandbox' o 'live'
 # El certificado .p12 y SRI_AMBIENTE ahora se configuran en el .env DE ESE
 # SERVICIO, no acá.
 FACTURACION_ELECTRONICA_SERVICE_URL = os.environ.get(
-    'FACTURACION_ELECTRONICA_SERVICE_URL', 'http://localhost:8001'
+    'FACTURACION_ELECTRONICA_SERVICE_URL', 'http://localhost:8002'
 )
 FACTURACION_ELECTRONICA_SERVICE_API_KEY = os.environ.get('FACTURACION_ELECTRONICA_SERVICE_API_KEY', '')
 FACTURACION_ELECTRONICA_SERVICE_TIMEOUT = float(os.environ.get('FACTURACION_ELECTRONICA_SERVICE_TIMEOUT', '10'))

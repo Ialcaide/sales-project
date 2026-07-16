@@ -7,7 +7,12 @@ from client import SRIError
 def test_index_no_requiere_api_key(client):
     response = client.get('/')
     assert response.status_code == 200
-    assert response.json() == {'servicio': 'sri_facturacion_service', 'estado': 'ok'}
+    data = response.json()
+    assert data['servicio'] == 'sri_facturacion_service'
+    assert data['estado'] == 'ok'
+    assert data['ambiente_sri'] in ('pruebas', 'produccion')
+    assert data['recepcion_wsdl'].startswith('https://')
+    assert data['autorizacion_wsdl'].startswith('https://')
 
 
 def test_crear_comprobante_sin_api_key_es_401(client, payload_dict):

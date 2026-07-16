@@ -13,6 +13,7 @@ import logging
 
 from zeep import Client
 from zeep.exceptions import Fault, TransportError
+from zeep.transports import Transport
 
 import config
 
@@ -38,14 +39,25 @@ def _es_produccion():
     return config.SRI_AMBIENTE == 'produccion'
 
 
-def _recepcion_client():
+def _make_transport() -> Transport:
+    """Transporte zeep con timeouts configurados para producción.
+    - timeout (30 s): tiempo máximo para establecer la conexión TCP / descargar el WSDL.
+    - operation_timeout (60 s): tiempo máximo para que el web service del SRI responda
+      una vez que la conexión ya está abierta. 60 s es generoso pero realista: el SRI
+      en carga alta puede tardar varios segundos en procesar un comprobante grande.
+      Sin este valor, el request queda colgado indefinidamente hasta que el SO cierre
+      el socket, lo que en producción traba el worker de uvicorn completo."""
+    return Transport(timeout=30, operation_timeout=60)
+
+
+def _recepcion_client() -> Client:
     url = RECEPCION_WSDL_PRODUCCION if _es_produccion() else RECEPCION_WSDL_PRUEBAS
-    return Client(url)
+    return Client(url, transport=_make_transport())
 
 
-def _autorizacion_client():
+def _autorizacion_client() -> Client:
     url = AUTORIZACION_WSDL_PRODUCCION if _es_produccion() else AUTORIZACION_WSDL_PRUEBAS
-    return Client(url)
+    return Client(url, transport=_make_transport())
 
 
 def enviar_recepcion(xml_firmado_bytes):

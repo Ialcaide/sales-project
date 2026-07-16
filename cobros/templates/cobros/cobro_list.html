@@ -1,0 +1,76 @@
+{% extends 'billing/base.html' %}
+{% block title %}Historial de Cobros{% endblock %}
+{% block breadcrumbs %}<span class="current">Cobros a Clientes</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>
+    Historial de Cobros a Clientes
+    {% if factura_filtro %}
+      <small class="text-muted fs-6">— Factura #{{ factura_filtro.id|stringformat:"04d" }}</small>
+    {% endif %}
+  </h2>
+  <a href="{% url 'cobros:invoice_pending_list' %}" class="btn btn-secondary"><i data-lucide="hourglass"></i>Facturas Pendientes</a>
+</div>
+
+{% if factura_filtro %}
+  <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>Mostrando solo los cobros de la factura <strong>#{{ factura_filtro.id|stringformat:"04d" }}</strong> — Saldo actual: <strong>${{ factura_filtro.saldo }}</strong></span>
+    <a href="{% url 'cobros:cobro_list' %}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
+  </div>
+{% endif %}
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Apellido del cliente...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query or factura_filtro %}
+      <a href="{% url 'cobros:cobro_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>Factura</th><th>Cliente</th><th>Fecha de Cobro</th><th class="text-end">Valor</th><th>Forma de Pago</th><th>Observación</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ item.factura_id|stringformat:"04d" }}</td>
+          <td>{{ item.factura.customer }}</td>
+          <td>{{ item.fecha|date:"d/m/Y" }}</td>
+          <td class="text-end fw-bold">${{ item.valor }}</td>
+          <td>{{ item.get_forma_pago_display }}</td>
+          <td>{{ item.observacion|default:"-" }}</td>
+          <td>
+            <div class="row-actions">
+              {% if perms.cobros.view_cobrofactura %}
+                <a href="{% url 'cobros:cobro_pdf' item.pk %}" class="row-action-btn" title="Ver comprobante" target="_blank"><i data-lucide="receipt"></i></a>
+              {% endif %}
+              {% if perms.cobros.delete_cobrofactura %}
+                <button type="button" class="row-action-btn danger" title="Eliminar" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                        data-delete-url="{% url 'cobros:cobro_delete' item.pk %}" data-delete-label="este cobro">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="8">No hay cobros registrados</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

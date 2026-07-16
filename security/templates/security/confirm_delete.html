@@ -3,12 +3,12 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <div class="alert alert-danger">
-      <h4>¿Estás seguro?</h4>
+    <div class="alert alert-danger alert-block">
+      <h4 class="icon-text"><i data-lucide="triangle-alert" class="icon-md"></i>¿Estás seguro?</h4>
       <p>Vas a eliminar: <strong>{{ object }}</strong></p>
       <form method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <button type="submit" class="btn btn-danger"><i data-lucide="trash-2"></i>Sí, eliminar</button>
         <a href="javascript:history.back()" class="btn btn-secondary">Cancelar</a>
       </form>
     </div>

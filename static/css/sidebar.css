@@ -1,0 +1,147 @@
+/* ==========================================================================
+   SIDEBAR
+   Panel de navegación fijo (280px, colapsable a 72px de solo-ícono con
+   tooltip). El estado colapsado/drawer-móvil lo controla static/js/sidebar.js
+   agregando/quitando clases en .app-shell — este archivo solo define cómo
+   se ve cada estado. Los breakpoints (drawer en móvil) están en
+   responsive.css, no acá.
+   ========================================================================== */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 1040;
+  transition: width var(--transition-base), transform var(--transition-base);
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed .sidebar {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--header-height);
+  padding: 0 var(--space-3);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sidebar-brand-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  background: var(--color-primary); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-brand-text { display: flex; flex-direction: column; line-height: 1.15; overflow: hidden; }
+.sidebar-brand-text strong { font-size: var(--font-size-base); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.sidebar-brand-text span { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.app-shell.sidebar-collapsed .sidebar-brand-text { display: none; }
+
+.sidebar-nav {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-2);
+}
+
+.nav-group { margin-bottom: var(--space-1); }
+.nav-group-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  white-space: nowrap;
+}
+.app-shell.sidebar-collapsed .nav-group-title { display: none; }
+
+.nav-item-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-md);
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  position: relative;
+}
+.nav-item-link svg { flex-shrink: 0; width: var(--icon-md); height: var(--icon-md); }
+.nav-item-link:hover { background-color: var(--color-bg); color: var(--color-text-primary); }
+.nav-item-link.active { background-color: var(--color-primary-light); color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+.app-shell.sidebar-collapsed .nav-item-link { justify-content: center; padding: 10px; }
+.app-shell.sidebar-collapsed .nav-item-link span.nav-item-label { display: none; }
+
+/* Tooltip cuando el sidebar está colapsado */
+.app-shell.sidebar-collapsed .nav-item-link::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) scale(.92);
+  background: var(--color-text-primary);
+  color: var(--color-surface);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  z-index: 1060;
+}
+.app-shell.sidebar-collapsed .nav-item-link:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-2);
+  flex-shrink: 0;
+}
+.sidebar-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.sidebar-collapse-toggle:hover { background-color: var(--color-bg); }
+.sidebar-collapse-toggle svg { transition: transform var(--transition-base); }
+.app-shell.sidebar-collapsed .sidebar-collapse-toggle svg { transform: rotate(180deg); }
+
+/* ---------- Drawer móvil ---------- */
+
+.drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+  z-index: 1035;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+.drawer-backdrop.show { display: block; opacity: 1; }

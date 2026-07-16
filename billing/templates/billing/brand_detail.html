@@ -3,16 +3,16 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
-    <div class="card shadow border-0">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <div class="card">
+      <div class="card-header">
         <h4 class="mb-0">Detalle de la marca</h4>
         {% if brand.is_active %}
-          <span class="badge bg-success">Activa</span>
+          <span class="badge badge-success">Activa</span>
         {% else %}
-          <span class="badge bg-danger">Inactiva</span>
+          <span class="badge badge-error">Inactiva</span>
         {% endif %}
       </div>
-      <div class="card-body p-4">
+      <div class="card-body">
         <div class="mb-3">
           <p class="text-muted small mb-1">Nombre</p>
           <p class="fw-bold fs-5">{{ brand.name }}</p>
@@ -34,37 +34,35 @@
         </div>
         <hr>
         <h5 class="mb-3">Productos de esta marca</h5>
-        <table class="table table-sm table-hover">
-          <thead class="table-dark">
-            <tr>
-              <th>Nombre</th>
-              <th>Grupo</th>
-              <th class="text-end">Precio</th>
-              <th class="text-center">Stock</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in brand.products.all %}
-            <tr>
-              <td>{{ p.name }}</td>
-              <td>{{ p.group.name }}</td>
-              <td class="text-end">${{ p.unit_price }}</td>
-              <td class="text-center">{{ p.stock }}</td>
-              <td>
-                <a href="{% url 'billing:product_detail' p.pk %}" class="btn btn-sm btn-info">Ver</a>
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="5" class="text-center text-muted">Sin productos asociados</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="table-modern-wrap">
+          <table class="table-modern">
+            <thead>
+              <tr><th>Nombre</th><th>Grupo</th><th class="text-end">Precio</th><th class="text-end">Stock</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for p in brand.products.all %}
+              <tr>
+                <td>{{ p.name }}</td>
+                <td>{{ p.group.name }}</td>
+                <td class="text-end">${{ p.unit_price }}</td>
+                <td class="text-end">{{ p.stock }}</td>
+                <td><a href="{% url 'billing:product_detail' p.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a></td>
+              </tr>
+              {% empty %}
+              <tr class="empty-row"><td colspan="5">Sin productos asociados</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div class="card-footer d-flex gap-2">
-        <a href="{% url 'billing:brand_list' %}" class="btn btn-outline-secondary">Volver</a>
-        <a href="{% url 'billing:brand_update' brand.pk %}" class="btn btn-warning">Editar</a>
-        <a href="{% url 'billing:brand_delete' brand.pk %}" class="btn btn-danger">Borrar</a>
+        <a href="{% url 'billing:brand_list' %}" class="btn btn-secondary">Volver</a>
+        {% if perms.billing.change_brand %}
+          <a href="{% url 'billing:brand_update' brand.pk %}" class="btn btn-warning"><i data-lucide="pencil"></i>Editar</a>
+        {% endif %}
+        {% if perms.billing.delete_brand %}
+          <a href="{% url 'billing:brand_delete' brand.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Borrar</a>
+        {% endif %}
       </div>
     </div>
   </div>

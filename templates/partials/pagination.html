@@ -1,20 +1,20 @@
 {% if page_obj.paginator.num_pages > 1 %}
 <nav aria-label="Paginación" class="mt-4">
-  <ul class="pagination pagination-modern justify-content-center flex-wrap">
+  <ul class="pagination-modern">
     {% if page_obj.has_previous %}
       <li class="page-item">
         <a class="page-link" href="?page=1{% if extra_qs %}&{{ extra_qs }}{% endif %}" aria-label="Primera">
-          <i class="bi bi-chevron-bar-left"></i>
+          <i data-lucide="chevrons-left"></i>
         </a>
       </li>
       <li class="page-item">
         <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if extra_qs %}&{{ extra_qs }}{% endif %}" aria-label="Anterior">
-          <i class="bi bi-chevron-left"></i>
+          <i data-lucide="chevron-left"></i>
         </a>
       </li>
     {% else %}
-      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-bar-left"></i></span></li>
-      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i data-lucide="chevrons-left"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i data-lucide="chevron-left"></i></span></li>
     {% endif %}
 
     {% for num in page_range %}
@@ -34,20 +34,20 @@
     {% if page_obj.has_next %}
       <li class="page-item">
         <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if extra_qs %}&{{ extra_qs }}{% endif %}" aria-label="Siguiente">
-          <i class="bi bi-chevron-right"></i>
+          <i data-lucide="chevron-right"></i>
         </a>
       </li>
       <li class="page-item">
         <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if extra_qs %}&{{ extra_qs }}{% endif %}" aria-label="Última">
-          <i class="bi bi-chevron-bar-right"></i>
+          <i data-lucide="chevrons-right"></i>
         </a>
       </li>
     {% else %}
-      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
-      <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-bar-right"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i data-lucide="chevron-right"></i></span></li>
+      <li class="page-item disabled"><span class="page-link"><i data-lucide="chevrons-right"></i></span></li>
     {% endif %}
   </ul>
-  <p class="text-center text-muted small pagination-summary">
+  <p class="pagination-summary">
     Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }} registros
   </p>
 </nav>

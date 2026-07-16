@@ -1,0 +1,125 @@
+{% extends 'billing/base.html' %}
+{% block title %}Configuración del Sistema{% endblock %}
+{% block breadcrumbs %}<span class="current">Configuración</span>{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <h2 class="icon-text"><i data-lucide="settings" class="icon-lg icon-primary"></i>Configuración del Sistema</h2>
+  <p class="text-muted mb-0">Parámetros globales usados en facturas, compras, crédito y notificaciones.</p>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="card mb-4">
+    <div class="card-header">Datos de la Empresa</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">{{ form.empresa_nombre.label }}</label>
+          {{ form.empresa_nombre }}
+          {% for error in form.empresa_nombre.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ form.empresa_ruc.label }}</label>
+          {{ form.empresa_ruc }}
+          {% for error in form.empresa_ruc.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">{{ form.empresa_direccion.label }}</label>
+          {{ form.empresa_direccion }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.empresa_telefono.label }}</label>
+          {{ form.empresa_telefono }}
+        </div>
+      </div>
+      <div class="form-text mt-2">Se usan en las facturas/comprobantes en PDF y en los correos/WhatsApp de venta, pago y cobro.</div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">Impuestos y Moneda</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">{{ form.iva_porcentaje.label }}</label>
+          {{ form.iva_porcentaje }}
+          {% for error in form.iva_porcentaje.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.moneda_simbolo.label }}</label>
+          {{ form.moneda_simbolo }}
+          <div class="form-text">Se guarda para uso futuro — las pantallas actuales siguen mostrando $.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">Umbrales por Defecto</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">{{ form.stock_minimo_default.label }}</label>
+          {{ form.stock_minimo_default }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.credito_porcentaje_por_compras.label }}</label>
+          {{ form.credito_porcentaje_por_compras }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.dias_credito_factura_default.label }}</label>
+          {{ form.dias_credito_factura_default }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.dias_aviso_vencimiento_producto.label }}</label>
+          {{ form.dias_aviso_vencimiento_producto }}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.dias_aviso_pago_compra.label }}</label>
+          {{ form.dias_aviso_pago_compra }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">Facturación Electrónica (SRI)</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">{{ form.sri_establecimiento.label }}</label>
+          {{ form.sri_establecimiento }}
+          {% for error in form.sri_establecimiento.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">{{ form.sri_punto_emision.label }}</label>
+          {{ form.sri_punto_emision }}
+          {% for error in form.sri_punto_emision.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ form.sri_nombre_comercial.label }}</label>
+          {{ form.sri_nombre_comercial }}
+        </div>
+        <div class="col-md-12">
+          <div class="form-check">
+            {{ form.sri_obligado_contabilidad }}
+            <label class="form-check-label fw-bold">{{ form.sri_obligado_contabilidad.label }}</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-text mt-2">
+        El RUC y la dirección matriz son los de "Datos de la Empresa" arriba. El certificado de firma
+        electrónica (.p12) y su contraseña se configuran aparte, en el archivo <code>.env</code> del
+        servidor (nunca desde esta pantalla) — ver <code>SRI_CERTIFICADO_PATH</code> / <code>SRI_CERTIFICADO_PASSWORD</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end">
+    <button type="submit" class="btn btn-primary"><i data-lucide="check-circle"></i>Guardar Configuración</button>
+  </div>
+</form>
+
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'billing/base.html' %}
+{% block title %}Historial de Devoluciones{% endblock %}
+{% block breadcrumbs %}<span class="current">Devoluciones</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Historial de Devoluciones</h2>
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Apellido del cliente...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query %}
+      <a href="{% url 'devoluciones:devolucion_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>Factura</th><th>Cliente</th><th class="text-end">Total Devuelto</th><th>Motivo</th><th>Fecha</th><th>Usuario</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ item.factura_id|stringformat:"04d" }}</td>
+          <td>{{ item.factura.customer }}</td>
+          <td class="text-end fw-bold">${{ item.total }}</td>
+          <td>{{ item.motivo|truncatechars:40 }}</td>
+          <td>{{ item.fecha|date:"d/m/Y H:i" }}</td>
+          <td>{{ item.usuario }}</td>
+          <td>
+            {% if perms.devoluciones.view_devolucionventa %}
+              <a href="{% url 'devoluciones:devolucion_detail' item.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="8">No hay devoluciones registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

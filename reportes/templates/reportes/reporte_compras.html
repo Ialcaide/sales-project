@@ -1,0 +1,86 @@
+{% extends 'billing/base.html' %}
+{% block title %}Reporte de Compras{% endblock %}
+{% block breadcrumbs %}<a href="{% url 'reportes:reporte_index' %}">Reportes</a> / <span class="current">Compras</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Reporte de Compras</h2>
+  <div class="list-header-actions">
+    <a href="{% url 'purchasing:purchase_report' %}" class="btn btn-secondary">Costo por producto</a>
+    <a href="{% url 'reportes:reporte_index' %}" class="btn btn-secondary">Volver</a>
+  </div>
+</div>
+
+{% include 'reportes/_filtro_periodo.html' %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Tipo de Pago</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Tipo</th><th class="text-end">Compras</th><th class="text-end">Total</th></tr></thead>
+          <tbody>
+            {% for row in por_tipo_pago %}
+            <tr>
+              <td>{{ row.tipo_pago|capfirst }}</td>
+              <td class="text-end">{{ row.cantidad }}</td>
+              <td class="text-end">${{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Proveedor</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Proveedor</th><th class="text-end">Compras</th><th class="text-end">Total</th></tr></thead>
+          <tbody>
+            {% for row in por_proveedor %}
+            <tr>
+              <td>{{ row.supplier__name }}</td>
+              <td class="text-end">{{ row.cantidad }}</td>
+              <td class="text-end">${{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header card-header-warning">
+    <span>Compras del período</span>
+    <span>Total: ${{ total_general|floatformat:2 }}</span>
+  </div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>#</th><th>Fecha</th><th>Proveedor</th><th>Tipo</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for c in compras %}
+        <tr>
+          <td>#{{ c.id }}</td>
+          <td>{{ c.purchase_date|date:"d/m/Y H:i" }}</td>
+          <td>{{ c.supplier }}</td>
+          <td>{{ c.get_tipo_pago_display }}</td>
+          <td class="text-end fw-bold">${{ c.total }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="5">No hay compras en el período seleccionado</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

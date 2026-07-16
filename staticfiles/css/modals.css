@@ -1,0 +1,76 @@
+/* ==========================================================================
+   MODALES
+   Fondo desenfocado + fade/scale al abrir. La mecánica de apertura/cierre
+   (foco, ESC, click en backdrop) la sigue resolviendo el JS de Bootstrap
+   (bootstrap.bundle.min.js, cargado solo por su motor de interacción — ver
+   nota en billing/base.html); acá solo se redefine 100% la apariencia.
+   ========================================================================== */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1055;
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  outline: 0;
+}
+.modal.show { display: block; }
+
+.modal-dialog {
+  position: relative;
+  width: auto;
+  margin: var(--space-4) auto;
+  max-width: 500px;
+  pointer-events: none;
+}
+.modal-dialog-centered {
+  display: flex;
+  align-items: center;
+  min-height: calc(100% - (var(--space-4) * 2));
+}
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, .55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+}
+.modal-backdrop.show { opacity: 1; }
+
+.modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  background-color: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-modal);
+  outline: 0;
+}
+.modal-header {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-weight: var(--font-weight-bold); font-size: 1.05rem; margin: 0; }
+.modal-body { padding: var(--space-3); }
+.modal-footer {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: flex; justify-content: flex-end; gap: var(--space-1);
+  border-top: none;
+}
+
+/* Fade + Scale al abrir/cerrar */
+.modal.fade .modal-dialog { transform: scale(.95) translateY(10px); transition: transform var(--transition-base), opacity var(--transition-base); opacity: 0; }
+.modal.show .modal-dialog { transform: scale(1) translateY(0); opacity: 1; }

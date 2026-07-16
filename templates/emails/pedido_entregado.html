@@ -1,0 +1,37 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Pedido entregado — último paso del ciclo del pedido.
+Variables: usuario, pedido_numero, fecha_entrega, factura_url (opcional).
+{% endcomment %}
+
+{% block preheader %}Tu pedido #{{ pedido_numero }} fue entregado con éxito.{% endblock %}
+
+{% block header_icon %}
+<div style="width:56px; height:56px; border-radius:50%; background-color:rgba(255,255,255,.16); text-align:center; line-height:56px; font-size:26px; margin:0 auto 16px;">&#127881;</div>
+{% endblock %}
+{% block header_title %}¡Pedido entregado!{% endblock %}
+{% block header_subtitle %}Tu pedido #{{ pedido_numero }} llegó a destino.{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#111827;">Hola {{ usuario }},</p>
+<p style="margin:0 0 8px; font-size:15px; line-height:1.7; color:#374151;">
+  Confirmamos la entrega de tu pedido. ¡Gracias por tu compra!
+</p>
+
+{% include "emails/partials/_pedido_stepper.html" with paso_actual="entregado" %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC; border:1px solid #E5E7EB; border-radius:12px; margin:4px 0 8px;">
+  <tr>
+    <td style="padding: 6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/partials/_data_row.html" with label="N° de pedido" valor=pedido_numero %}
+        {% include "emails/partials/_data_row.html" with label="Fecha de entrega" valor=fecha_entrega es_ultima=True %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% include "emails/partials/_alert.html" with tipo="success" texto="Si tenés algún problema con tu pedido, contactá a soporte y te ayudamos." %}
+
+{% if factura_url %}{% include "emails/partials/_button.html" with url=factura_url label="Ver factura" variante="secondary" %}{% endif %}
+{% endblock %}

@@ -1,0 +1,58 @@
+/* ==========================================================================
+   ANIMACIONES
+   Microinteracciones del sistema — Fade In, Slide Up, Scale, Hover Lift,
+   Ripple y Skeleton Loading — todas entre 180-250ms con ease-in-out (ver
+   --transition-* en tokens.css). Los efectos "puntuales" de un componente
+   (modal fade+scale, sidebar tooltip) viven en el CSS de ese componente;
+   acá solo las utilidades reutilizables en cualquier plantilla.
+   ========================================================================== */
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes ripple-anim { to { transform: scale(2.5); opacity: 0; } }
+@keyframes skeleton-pulse { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Fade In / Slide Up / Scale — se aplican vía clase, ver
+   static/js/ui.js (contenido principal) y stat-card en dashboard.css ---------- */
+.animate-fade-in { animation: fade-in var(--transition-base) both; }
+.animate-slide-up { animation: slide-up var(--transition-slow) both; }
+.animate-scale-in { animation: scale-in var(--transition-base) both; }
+
+/* ---------- Hover Lift — cards y tarjetas KPI que se elevan al pasar el cursor ---------- */
+.hover-lift { transition: transform var(--transition-base), box-shadow var(--transition-base); }
+.hover-lift:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+
+/* ---------- Ripple — ver static/js/ui.js, que crea el .ripple-effect al hacer click en .btn/.row-action-btn ---------- */
+.ripple-surface { position: relative; overflow: hidden; }
+.ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .5);
+  transform: scale(0);
+  pointer-events: none;
+  animation: ripple-anim 550ms ease-out;
+}
+.btn-secondary .ripple-effect, .btn-outline-secondary .ripple-effect, .btn-ghost .ripple-effect,
+.row-action-btn .ripple-effect { background: rgba(37, 99, 235, .15); }
+
+/* ---------- Skeleton Loading — placeholder para contenido que aún no llegó (ver notificaciones dinámicas) ---------- */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg) 37%, var(--color-border) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-pulse 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-text { height: 14px; margin-bottom: 8px; }
+.skeleton-text:last-child { margin-bottom: 0; width: 70%; }
+
+.spin { animation: spin 900ms linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

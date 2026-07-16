@@ -1,0 +1,158 @@
+/* ==========================================================================
+   TABLAS Y LISTADOS
+   Reemplaza por completo la apariencia clásica de Bootstrap: encabezados en
+   mayúscula tenue, filas con hover, badges para estados, acciones por
+   ícono (ver buttons.css → .row-action-btn). Incluye la barra de
+   herramientas de listado, la paginación y la tabla clave-valor de las
+   páginas de detalle.
+   ========================================================================== */
+
+/* ---------- Barra de herramientas de listado ---------- */
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.list-header h2 { margin: 0; }
+.list-header-actions { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+
+.list-toolbar {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.list-toolbar .search-field { position: relative; max-width: 340px; flex: 1 1 260px; }
+.list-toolbar .search-field svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: var(--icon-sm); height: var(--icon-sm); color: var(--color-text-secondary); pointer-events: none;
+}
+.list-toolbar .search-field input { padding-left: 38px; }
+
+/* ---------- Tabla moderna ---------- */
+
+.table-modern-wrap { overflow-x: auto; }
+.table-modern {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--color-surface);
+}
+.table-modern thead th {
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--color-text-secondary);
+  padding: 12px var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.table-modern tbody td {
+  padding: 14px var(--space-2);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.table-modern tbody tr { transition: background-color var(--transition-fast); }
+.table-modern tbody tr:hover { background-color: var(--color-bg); }
+.table-modern tbody tr:last-child td { border-bottom: none; }
+.table-modern .text-end { text-align: right; }
+.table-modern .empty-row td { text-align: center; color: var(--color-text-secondary); padding: var(--space-4); }
+
+.card > .table-modern-wrap .table-modern thead th:first-child,
+.card > .table-modern-wrap .table-modern tbody td:first-child { padding-left: var(--space-3); }
+.card > .table-modern-wrap .table-modern thead th:last-child,
+.card > .table-modern-wrap .table-modern tbody td:last-child { padding-right: var(--space-3); }
+
+/* ---------- Tabla clave-valor (páginas de detalle) ---------- */
+
+.table-kv { width: 100%; border-collapse: collapse; }
+.table-kv tr { border-bottom: 1px solid var(--color-border); }
+.table-kv tr:last-child { border-bottom: none; }
+.table-kv th, .table-kv td { padding: 10px 8px; text-align: left; font-weight: var(--font-weight-regular); vertical-align: top; }
+.table-kv th { width: 180px; color: var(--color-text-secondary); font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); }
+.table-kv td { color: var(--color-text-primary); font-size: var(--font-size-md); }
+
+/* ---------- Tabla de factura/RIDE (invoice_detail.html, purchase_detail.html) ---------- */
+
+.factura-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-3); }
+.factura-table thead tr { background: var(--color-primary); }
+.factura-table thead th { color: #fff; padding: 12px 16px; font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: .05em; }
+.factura-table thead th:last-child { text-align: right; }
+.factura-table thead th:nth-child(2), .factura-table thead th:nth-child(3) { text-align: center; }
+.factura-table tbody tr { border-bottom: 1px solid var(--color-border); }
+.factura-table tbody tr:hover { background: var(--color-bg); }
+.factura-table tbody td { padding: 12px 16px; font-size: var(--font-size-md); color: var(--color-text-primary); }
+.factura-table tbody td:nth-child(2) { text-align: center; }
+.factura-table tbody td:nth-child(3), .factura-table tbody td:nth-child(4) { text-align: right; }
+.factura-totales { display: flex; justify-content: flex-end; }
+.totales-box { min-width: 280px; }
+.totales-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: var(--font-size-md); color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border); }
+.totales-row.total { font-size: 1.1rem; font-weight: var(--font-weight-extrabold); color: var(--color-primary); border-bottom: none; padding-top: 12px; }
+
+/* ---------- Paginación ---------- */
+
+.pagination-modern {
+  display: flex;
+  list-style: none;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.pagination-modern .page-item .page-link,
+.pagination-modern .page-item span.page-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.pagination-modern .page-item .page-link:hover { background-color: var(--color-primary-light); color: var(--color-primary); }
+.pagination-modern .page-item.active .page-link { background-color: var(--color-primary); color: #fff; }
+.pagination-modern .page-item.disabled .page-link { background: transparent; color: var(--color-border); cursor: default; }
+.pagination-modern .page-link svg { width: var(--icon-sm); height: var(--icon-sm); }
+.pagination-summary { text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: var(--space-1); }
+
+/* ---------- List group (panel de roles/usuarios en Permisos) ---------- */
+
+.list-group { display: flex; flex-direction: column; }
+.list-group.list-group-scroll { max-height: 320px; overflow-y: auto; }
+.list-group-item {
+  display: block;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  border-left: 3px solid transparent;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+.list-group-item:last-child { border-bottom: none; }
+.list-group-item-action { cursor: pointer; }
+.list-group-item-action:hover { background-color: var(--color-bg); text-decoration: none; }
+.list-group-item.active {
+  background: var(--color-primary-light);
+  border-left-color: var(--color-primary);
+  color: var(--color-primary-soft-text);
+  font-weight: var(--font-weight-semibold);
+}

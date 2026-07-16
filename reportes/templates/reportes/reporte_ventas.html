@@ -1,0 +1,84 @@
+{% extends 'billing/base.html' %}
+{% block title %}Reporte de Ventas{% endblock %}
+{% block breadcrumbs %}<a href="{% url 'reportes:reporte_index' %}">Reportes</a> / <span class="current">Ventas</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Reporte de Ventas</h2>
+  <a href="{% url 'reportes:reporte_index' %}" class="btn btn-secondary">Volver</a>
+</div>
+
+{% include 'reportes/_filtro_periodo.html' %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Tipo de Pago</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Tipo</th><th class="text-end">Facturas</th><th class="text-end">Total</th></tr></thead>
+          <tbody>
+            {% for row in por_tipo_pago %}
+            <tr>
+              <td>{{ row.tipo_pago|capfirst }}</td>
+              <td class="text-end">{{ row.cantidad }}</td>
+              <td class="text-end">${{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Forma de Pago</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Forma</th><th class="text-end">Facturas</th><th class="text-end">Total</th></tr></thead>
+          <tbody>
+            {% for row in por_forma_pago %}
+            <tr>
+              <td>{{ row.forma_pago|capfirst }}</td>
+              <td class="text-end">{{ row.cantidad }}</td>
+              <td class="text-end">${{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos (solo facturas al contado)</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header card-header-warning">
+    <span>Facturas del período</span>
+    <span>Total: ${{ total_general|floatformat:2 }}</span>
+  </div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Forma</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for f in facturas %}
+        <tr>
+          <td>#{{ f.id }}</td>
+          <td>{{ f.invoice_date|date:"d/m/Y H:i" }}</td>
+          <td>{{ f.customer }}</td>
+          <td>{{ f.get_tipo_pago_display }}</td>
+          <td>{{ f.get_forma_pago_display|default:"-" }}</td>
+          <td class="text-end fw-bold">${{ f.total }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="6">No hay facturas en el período seleccionado</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

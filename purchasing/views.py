@@ -1,13 +1,19 @@
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.urls import reverse
+from django.utils import timezone
 from decimal import Decimal
 from billing.models import Product
 from billing.export_mixins import ExportMixin
+from configuracion.models import ConfiguracionSistema
 from shared.decorators import permission_required_redirect
+from shared.notifications import send_credentials_email, get_admin_recipients
 from shared.pagination import build_extra_qs, get_page_range
-from .models import Purchase, PurchaseDetail
-from .forms import PurchaseForm, PurchaseDetailFormSet
+from .models import Bodega, Purchase, PurchaseDetail
+from .forms import BodegaQuickCreateForm, PurchaseForm, PurchaseDetailFormSet
 
 # Este archivo es el "hermano" de billing/views.py -> invoice_create: mismo
 # patrón de formulario + formset (cabecera + líneas), pero de compras en vez
@@ -15,7 +21,7 @@ from .forms import PurchaseForm, PurchaseDetailFormSet
 # mercadería) mientras que una factura RESTA stock (sale mercadería).
 
 
-@permission_required_redirect('purchasing.view_purchase', '/')
+@permission_required_redirect('purchasing.access_purchase_module', '/')
 def purchase_list(request):
     from billing.models import Supplier
     query = request.GET.get('q', '')
@@ -36,26 +42,29 @@ def purchase_list(request):
 
     export = request.GET.get('export', '')
     if export in ('pdf', 'excel'):
-        exporter = ExportMixin()
-        exporter.export_filename = 'compras'
-        exporter.export_title = 'Listado de Compras'
-        exporter.export_headers = ['#', 'Proveedor', 'N° Documento', 'Fecha', 'Subtotal', 'IVA', 'Total']
-        exporter.get_export_rows = lambda qs: [
-            [
-                p.id,
-                p.supplier.name,
-                p.document_number,
-                p.purchase_date.strftime('%d/%m/%Y'),
-                f'${p.subtotal}',
-                f'${p.tax}',
-                f'${p.total}',
-            ]
-            for p in qs
-        ]
-        if export == 'pdf':
-            return exporter.export_to_pdf(purchases)
+        if not request.user.has_perm(f'purchasing.export_{export}_purchase'):
+            messages.error(request, 'No tienes permiso para exportar este listado.')
         else:
-            return exporter.export_to_excel(purchases)
+            exporter = ExportMixin()
+            exporter.export_filename = 'compras'
+            exporter.export_title = 'Listado de Compras'
+            exporter.export_headers = ['#', 'Proveedor', 'N° Documento', 'Fecha', 'Subtotal', 'IVA', 'Total']
+            exporter.get_export_rows = lambda qs: [
+                [
+                    p.id,
+                    p.supplier.name,
+                    p.document_number,
+                    p.purchase_date.strftime('%d/%m/%Y'),
+                    f'${p.subtotal}',
+                    f'${p.tax}',
+                    f'${p.total}',
+                ]
+                for p in qs
+            ]
+            if export == 'pdf':
+                return exporter.export_to_pdf(purchases)
+            else:
+                return exporter.export_to_excel(purchases)
 
     paginator = Paginator(purchases, 10)
     page_number = request.GET.get('page')
@@ -76,40 +85,79 @@ def purchase_list(request):
 
 
 @permission_required_redirect('purchasing.add_purchase', '/purchases/')
+def bodega_quick_create(request):
+    """
+    Alta rápida de bodega desde el modal del paso 1 del wizard de compra
+    (ver static/js/purchase-wizard.js) — mismo patrón que
+    billing.views.customer_quick_create/supplier_quick_create: responde
+    JSON en vez de redirigir. Bodega no tiene su propio permiso ('add_bodega'
+    existe automático por ser un modelo, pero acá se reusa el permiso de
+    crear compras — quien puede armar el wizard, puede darle de alta a una
+    bodega nueva sin salir de él).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'errors': {'__all__': ['Método no permitido.']}}, status=405)
+
+    form = BodegaQuickCreateForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
+
+    bodega = form.save()
+    return JsonResponse({
+        'ok': True,
+        'bodega': {'id': bodega.id, 'label': bodega.nombre},
+    }, status=201)
+
+
+@permission_required_redirect('purchasing.add_purchase', '/purchases/')
 def purchase_create(request):
     import json
     from django.db import IntegrityError
     from billing.models import Supplier, Product
 
-    # suppliers_products: qué productos vende cada proveedor y a qué último
-    # costo, en JSON para que el JavaScript del template filtre el <select>
-    # de productos según el proveedor elegido, sin recargar la página.
+    # last_prices: último costo pagado a CADA proveedor por CADA producto
+    # (a diferencia de Product.last_cost, que es global y se pisa con
+    # cualquier proveedor). Una sola consulta ordenada por fecha descendente;
+    # como solo nos interesa la primera fila que aparece por cada
+    # (proveedor, producto), el resto se descarta al armar el dict.
+    last_prices = {}
+    detalles_recientes = PurchaseDetail.objects.select_related('purchase').order_by(
+        'product_id', '-purchase__purchase_date'
+    )
+    for d in detalles_recientes:
+        key = (d.purchase.supplier_id, d.product_id)
+        if key not in last_prices:
+            last_prices[key] = float(d.unit_cost)
+
+    # suppliers_products: qué productos vende cada proveedor, a qué último
+    # costo global, código de barras, imagen y último precio pagado A ESE
+    # proveedor puntual — en JSON para que el JavaScript del template
+    # autocomplete/filtre el <select> de productos sin recargar la página.
     suppliers_products = {}
     for supplier in Supplier.objects.filter(is_active=True):
         suppliers_products[supplier.id] = [
-            {'id': p.id, 'name': p.name, 'cost': float(p.last_cost) if p.last_cost else 0}
+            {
+                'id': p.id,
+                'name': p.name,
+                'cost': float(p.last_cost) if p.last_cost else 0,
+                'barcode': p.barcode or '',
+                'image_url': p.image.url if p.image else p.placeholder_image,
+                'last_price': last_prices.get((supplier.id, p.id)),
+            }
             for p in supplier.products.filter(is_active=True)
         ]
 
+    config = ConfiguracionSistema.get_solo()
     context_base = {
         'title': 'Nueva Compra',
         'suppliers_products_json': json.dumps(suppliers_products),
+        'iva_fraccion_json': json.dumps(float(config.iva_fraccion)),
+        'retencion_porcentaje_default_json': json.dumps(float(config.retencion_porcentaje_default)),
     }
 
     if request.method == 'POST':
-        # Los print() de acá abajo son de depuración (quedaron de cuando se
-        # diagnosticó un bug en este formulario) — no son necesarios para que
-        # la vista funcione, solo ayudan a ver en la consola del servidor qué
-        # llegó en el POST y por qué el formset pasó o no la validación.
-        # Se pueden borrar sin problema si ya no los necesitas.
-        print("POST DATA:", dict(request.POST))
-        form = PurchaseForm(request.POST)
+        form = PurchaseForm(request.POST, request.FILES)
         formset = PurchaseDetailFormSet(request.POST, instance=Purchase())
-        print("form valid:", form.is_valid())
-        print("formset valid:", formset.is_valid())
-        print("formset errors:", formset.errors)
-        for i, f in enumerate(formset.forms):
-            print(f"form {i} cleaned_data:", getattr(f, 'cleaned_data', 'NO'))
 
         if form.is_valid() and formset.is_valid():
 
@@ -161,10 +209,11 @@ def purchase_create(request):
 
             # Guardar: mismo patrón que invoice_create en billing/views.py
             # (commit=False -> guardar cabecera -> asociar formset -> guardar
-            # líneas -> recién ahí calcular totales), pero acá además cada
-            # línea SUBE el stock del producto y actualiza su last_cost —
-            # así el próximo Product.margin/last_cost ya refleja lo que
-            # realmente costó la última compra.
+            # líneas -> recién ahí calcular totales). A diferencia de antes,
+            # el stock/last_cost del producto YA NO se actualiza acá — la
+            # compra nace en fase BORRADOR y esa actualización se mueve a
+            # purchase_marcar_recibida, recién cuando la mercadería llegó de
+            # verdad (ver ese view más abajo).
             try:
                 purchase = form.save(commit=False)
                 purchase.save()
@@ -173,18 +222,74 @@ def purchase_create(request):
 
                 subtotal = sum(d.subtotal for d in purchase.details.all())
                 purchase.subtotal = subtotal
-                purchase.tax = subtotal * Decimal('0.15')
+                # Multiplicar dos Decimal suma sus decimales (2 + 2 = 4);
+                # sin quantize, el total en memoria mostraría "$115.0000" en
+                # vez de "$115.00" hasta el próximo refresh_from_db(). IVA
+                # configurable (ver configuracion/models.py).
+                purchase.tax = (subtotal * ConfiguracionSistema.get_solo().iva_fraccion).quantize(Decimal('0.01'))
                 purchase.total = purchase.subtotal + purchase.tax
+
+                # Una compra a crédito nace con interés (según meses_credito)
+                # y saldo = total + interés; al contado queda pagada de una
+                # (ver Purchase.aplicar_financiamiento() y módulo 'pagos').
+                purchase.aplicar_financiamiento()
+
+                # Retención: puramente informativa, calculada sobre el
+                # subtotal (antes de IVA) — no genera ningún comprobante de
+                # retención real ni valida contra tablas oficiales del SRI.
+                purchase.retencion_valor = (
+                    purchase.subtotal * purchase.retencion_porcentaje / Decimal('100')
+                ).quantize(Decimal('0.01'))
                 purchase.save()
 
-                for detail in purchase.details.all():
-                    product = detail.product
-                    product.stock += detail.quantity
-                    product.last_cost = detail.unit_cost
-                    product.save()
+                # Aviso a los administradores (evento nuevo, no existía antes
+                # ningún correo para esto) — "best effort", nunca bloquea el
+                # registro de la compra.
+                productos_ctx = [
+                    {'nombre': d.product.name, 'cantidad': d.quantity}
+                    for d in purchase.details.all()
+                ]
+                for admin_nombre, admin_email in get_admin_recipients():
+                    send_credentials_email(
+                        admin_email, f'Compra a proveedor registrada — #{purchase.id:04d}',
+                        (
+                            f'Hola {admin_nombre},\n\n'
+                            f'Se registró una nueva compra en el sistema:\n\n'
+                            f'N° de compra: {purchase.id:04d}\n'
+                            f'Proveedor: {purchase.supplier.name}\n'
+                            f'Total: ${purchase.total}\n\n'
+                            f'Atentamente,\n'
+                            f'Sistema de Ventas TecnoStock'
+                        ),
+                        html_template='compra_proveedor_registrada.html',
+                        html_context={
+                            'usuario': admin_nombre, 'proveedor_nombre': purchase.supplier.name,
+                            'compra_numero': f'{purchase.id:04d}',
+                            'fecha': purchase.purchase_date.strftime('%d/%m/%Y %H:%M'),
+                            'total': f'${purchase.total}', 'productos': productos_ctx,
+                            'compra_url': f'{settings.SITE_URL}{reverse("purchasing:purchase_detail", args=[purchase.pk])}',
+                        },
+                    )
 
-                messages.success(request, f'Compra #{purchase.id} registrada! Total: ${purchase.total}')
-                return redirect('purchasing:purchase_list')
+                # Aviso informativo de seguimiento: la fecha estimada de
+                # entrega ya no se pide en el wizard, se calcula sola
+                # (purchase.fecha_entrega_estimada = purchase_date + 24h).
+                messages.info(
+                    request,
+                    f'Seguimiento: el pedido debería llegar a más tardar el '
+                    f'{purchase.fecha_entrega_estimada:%d/%m/%Y %H:%M} (~24 horas).'
+                )
+
+                if purchase.tipo_pago == Purchase.CREDITO:
+                    messages.success(
+                        request,
+                        f'Compra #{purchase.id} registrada en Borrador! Total: ${purchase.total} + '
+                        f'interés ${purchase.interes} ({purchase.meses_credito} meses) = '
+                        f'${purchase.saldo} a pagar. Cuota mínima mensual: ${purchase.cuota_minima}'
+                    )
+                else:
+                    messages.success(request, f'Compra #{purchase.id} registrada en Borrador! Total: ${purchase.total}')
+                return redirect('purchasing:purchase_detail', pk=purchase.pk)
 
             except IntegrityError:
                 # Salta si se viola el UniqueConstraint del modelo Purchase
@@ -194,6 +299,12 @@ def purchase_create(request):
                 import traceback
                 traceback.print_exc()
                 messages.error(request, f'Error al guardar: {str(e)}')
+        else:
+            # Sin este mensaje, un error de validación (ej. elegir "Crédito"
+            # sin indicar los meses) hacía que la página simplemente se
+            # recargara con el campo marcado en rojo pero sin ningún aviso
+            # visible arriba — parecía que "no pasaba nada" al guardar.
+            messages.error(request, 'No se pudo guardar la compra: revisa los errores señalados en el formulario.')
 
     else:
         form = PurchaseForm()
@@ -204,8 +315,47 @@ def purchase_create(request):
         'form': form,
         'formset': formset,
     })
-    
-    
+
+
+# Transiciones de fase: Borrador -> Confirmada -> Recibida. Cada una exige
+# que la compra esté en la fase inmediata anterior (no se puede saltar
+# pasos) y reusa el permiso 'purchasing.change_purchase' — no hace falta
+# uno nuevo solo para esto.
+@permission_required_redirect('purchasing.change_purchase', '/purchases/')
+def purchase_confirmar(request, pk):
+    purchase = get_object_or_404(Purchase, pk=pk)
+    if purchase.fase != Purchase.BORRADOR:
+        messages.error(request, f'La compra #{purchase.id} ya no está en Borrador.')
+    else:
+        purchase.fase = Purchase.CONFIRMADA
+        purchase.save(update_fields=['fase'])
+        messages.success(request, f'Compra #{purchase.id} confirmada.')
+    return redirect('purchasing:purchase_detail', pk=purchase.pk)
+
+
+@permission_required_redirect('purchasing.change_purchase', '/purchases/')
+def purchase_marcar_recibida(request, pk):
+    purchase = get_object_or_404(
+        Purchase.objects.prefetch_related('details__product'), pk=pk
+    )
+    if purchase.fase != Purchase.CONFIRMADA:
+        messages.error(request, f'La compra #{purchase.id} debe estar Confirmada antes de marcarla como recibida.')
+        return redirect('purchasing:purchase_detail', pk=purchase.pk)
+
+    # Acá es donde entra la mercadería de verdad: se mueve desde
+    # purchase_create (donde corría al crear la compra, antes de que
+    # existiera el flujo Borrador/Confirmada/Recibida) — cada línea SUBE el
+    # stock del producto y actualiza su last_cost.
+    for detail in purchase.details.all():
+        product = detail.product
+        product.stock += detail.quantity
+        product.last_cost = detail.unit_cost
+        product.save()
+
+    purchase.fase = Purchase.RECIBIDA
+    purchase.save(update_fields=['fase'])
+    messages.success(request, f'Compra #{purchase.id} marcada como recibida. Stock actualizado.')
+    return redirect('purchasing:purchase_detail', pk=purchase.pk)
 
 
 @permission_required_redirect('purchasing.view_purchase', '/purchases/')
@@ -256,8 +406,14 @@ def purchase_pdf(request, pk):
         fontSize=9, fontName='Helvetica-Bold',
         textColor=colors.HexColor('#334155'), spaceAfter=2)
 
-    story.append(Paragraph('TecnoStock S.A.', title_style))
+    config = ConfiguracionSistema.get_solo()
+    story.append(Paragraph(config.empresa_nombre, title_style))
     story.append(Paragraph('Sistema de Gestión de Ventas y Facturación', sub_style))
+    datos_empresa = ' | '.join(
+        d for d in [config.empresa_ruc and f'RUC: {config.empresa_ruc}', config.empresa_direccion, config.empresa_telefono] if d
+    )
+    if datos_empresa:
+        story.append(Paragraph(datos_empresa, sub_style))
     story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 0.3*cm))
 
@@ -314,7 +470,7 @@ def purchase_pdf(request, pk):
     # Totales
     totales_data = [
         ['', 'Subtotal:', f'${purchase.subtotal}'],
-        ['', 'IVA (15%):', f'${purchase.tax}'],
+        ['', f'IVA ({config.iva_porcentaje}%):', f'${purchase.tax}'],
         ['', 'TOTAL:', f'${purchase.total}'],
     ]
     totales_table = Table(totales_data, colWidths=[9*cm, 4*cm, 5*cm])
@@ -331,7 +487,7 @@ def purchase_pdf(request, pk):
     story.append(Spacer(1, 0.5*cm))
     story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph('Registro interno de compra — TecnoStock S.A.', sub_style))
+    story.append(Paragraph(f'Registro interno de compra — {config.empresa_nombre}', sub_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -355,7 +511,7 @@ def purchase_delete(request, pk):
 # promedio, y en cuántas compras distintas apareció. .values('product__name')
 # agrupa por nombre de producto (como un GROUP BY en SQL), y .annotate()
 # calcula Avg/Sum/Count por cada grupo — todo resuelto por el ORM, sin SQL manual.
-@permission_required_redirect('purchasing.view_purchase', '/purchases/')
+@permission_required_redirect('purchasing.access_purchase_module', '/purchases/')
 def purchase_report(request):
     from django.db.models import Avg, Sum, Count
     from billing.models import Supplier

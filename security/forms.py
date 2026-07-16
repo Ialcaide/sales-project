@@ -3,11 +3,10 @@ import re
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User, Group, Permission
+from django.contrib.auth.password_validation import validate_password
 
+from shared.validators import normalize_phone, validate_phone
 from .models import UserProfile
-
-# Acepta un + opcional seguido de 7 a 15 dígitos (formato internacional simple).
-PHONE_RE = re.compile(r'^\+?\d{7,15}$')
 
 
 class UserRegisterForm(UserCreationForm):
@@ -74,11 +73,11 @@ class UserRegisterForm(UserCreationForm):
         return email
 
     def clean_phone(self):
-        phone = self.cleaned_data.get('phone', '').strip()
-        if not PHONE_RE.match(phone):
-            raise forms.ValidationError(
-                'Ingresa un número de teléfono válido (solo dígitos, con o sin "+" al inicio, entre 7 y 15 dígitos).'
-            )
+        # normalize_phone antepone +593 si el número no trae código de país
+        # (ej. "0987654321" -> "+593987654321"), para que quede listo tal
+        # cual lo necesita send_whatsapp_message (shared/notifications.py).
+        phone = normalize_phone(self.cleaned_data.get('phone', ''))
+        validate_phone(phone)
         if UserProfile.objects.filter(phone=phone).exists():
             raise forms.ValidationError('Ya existe un usuario registrado con este número de teléfono.')
         return phone
@@ -95,13 +94,28 @@ class UserRegisterForm(UserCreationForm):
 
 
 class UserUpdateForm(forms.ModelForm):
-    """Formulario para editar un usuario existente (username, datos, roles y teléfono)."""
+    """
+    Formulario para editar un usuario existente (username, datos, roles,
+    teléfono y, opcionalmente, su contraseña — el administrador puede
+    restablecerla sin necesitar la anterior). Ambos campos de contraseña
+    quedan vacíos por defecto: si se dejan así, la contraseña actual no se
+    toca; solo se cambia si el admin escribe algo en los dos.
+    """
     phone = forms.CharField(required=True, label='Teléfono / WhatsApp')
     groups = forms.ModelMultipleChoiceField(
         queryset=Group.objects.all(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
         label='Roles',
+    )
+    new_password1 = forms.CharField(
+        required=False, label='Nueva contraseña',
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+        help_text='Déjalo en blanco para no cambiar la contraseña actual.',
+    )
+    new_password2 = forms.CharField(
+        required=False, label='Confirmar nueva contraseña',
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
     )
 
     class Meta:
@@ -127,9 +141,27 @@ class UserUpdateForm(forms.ModelForm):
             if profile:
                 self.fields['phone'].initial = profile.phone
 
+    def clean(self):
+        cleaned_data = super().clean()
+        p1 = cleaned_data.get('new_password1')
+        p2 = cleaned_data.get('new_password2')
+        if p1 or p2:
+            if p1 != p2:
+                raise forms.ValidationError({'new_password2': 'Las dos contraseñas no coinciden.'})
+            try:
+                validate_password(p1, user=self.instance)
+            except forms.ValidationError as e:
+                raise forms.ValidationError({'new_password1': e.messages})
+        return cleaned_data
+
     def save(self, commit=True):
-        user = super().save(commit)
+        user = super().save(commit=False)
+        new_password = self.cleaned_data.get('new_password1')
+        if new_password:
+            user.set_password(new_password)
         if commit:
+            user.save()
+            self.save_m2m()
             # update_or_create: si ya tenía perfil lo actualiza, si no, lo crea.
             UserProfile.objects.update_or_create(
                 user=user, defaults={'phone': self.cleaned_data['phone']}
@@ -173,11 +205,8 @@ class ProfileForm(forms.ModelForm):
         return email
 
     def clean_phone(self):
-        phone = self.cleaned_data.get('phone', '').strip()
-        if not PHONE_RE.match(phone):
-            raise forms.ValidationError(
-                'Ingresa un número de teléfono válido (solo dígitos, con o sin "+" al inicio, entre 7 y 15 dígitos).'
-            )
+        phone = normalize_phone(self.cleaned_data.get('phone', ''))
+        validate_phone(phone)
         if UserProfile.objects.filter(phone=phone).exclude(user=self.instance).exists():
             raise forms.ValidationError('Ya existe un usuario registrado con este número de teléfono.')
         return phone
@@ -199,11 +228,25 @@ class PasswordChangeCodeForm(forms.Form):
     hace la vista, una vez validado el código (ver security/views.py).
     """
     code = forms.CharField(
-        label='Código de verificación', max_length=6,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'one-time-code', 'placeholder': '000000'}),
+        # max_length generoso a propósito: si el usuario copia el código
+        # desde el correo y sin querer selecciona un espacio o texto de más
+        # (ej. "es: 123456"), no queremos rechazar el campo ANTES de poder
+        # limpiarlo en clean_code() — mejor limpiar primero y comparar después.
+        label='Código de verificación', max_length=20,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 'autocomplete': 'one-time-code',
+            'placeholder': '000000', 'inputmode': 'numeric',
+        }),
     )
     new_password1 = forms.CharField(label='Nueva contraseña', widget=forms.PasswordInput(attrs={'class': 'form-control'}))
     new_password2 = forms.CharField(label='Confirmar nueva contraseña', widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+
+    def clean_code(self):
+        # Se queda solo con los dígitos (ignora espacios, puntos, texto
+        # pegado de más) para que copiar/pegar el código del correo con
+        # algún caracter extra alrededor no lo rechace.
+        raw = self.cleaned_data.get('code', '')
+        return re.sub(r'\D', '', raw)
 
     def clean(self):
         cleaned_data = super().clean()

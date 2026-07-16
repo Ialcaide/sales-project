@@ -1,0 +1,49 @@
+/* ==========================================================================
+   MODO OSCURO
+   Redefine las variables de tokens.css bajo :root[data-theme="dark"] — una
+   paleta propia (slate 900/800), no un filtro/invert. Como layout.css,
+   sidebar.css, header.css, cards.css, buttons.css, forms.css, tables.css,
+   modals.css, dropdowns.css, badges.css y alerts.css están escritos 100% en
+   var(--...), ninguno de esos archivos necesita saber que el modo oscuro
+   existe: alcanza con cambiar el atributo data-theme en <html> (ver
+   static/js/theme.js). Solo van acá las pocas reglas que de verdad
+   necesitan un valor distinto al de la variable (ej. el glass del header,
+   que usa rgba fija en vez de --color-surface).
+   ========================================================================== */
+
+:root[data-theme="dark"] {
+  --color-bg: #0F172A;
+  --color-surface: #1E293B;
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-border: #334155;
+
+  --color-primary: #3B82F6;
+  --color-primary-hover: #60A5FA;
+  --color-primary-light: rgba(59, 130, 246, .16);
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-error: #F87171;
+  --color-info: #38BDF8;
+
+  --color-success-soft-bg: rgba(52, 211, 153, .15); --color-success-soft-text: #6EE7B7;
+  --color-warning-soft-bg: rgba(251, 191, 36, .15); --color-warning-soft-text: #FCD34D;
+  --color-error-soft-bg:   rgba(248, 113, 113, .15); --color-error-soft-text:   #FCA5A5;
+  --color-info-soft-bg:    rgba(56, 189, 248, .15);  --color-info-soft-text:    #7DD3FC;
+  --color-primary-soft-bg: rgba(59, 130, 246, .15);  --color-primary-soft-text: #93C5FD;
+  --color-neutral-soft-bg: #334155; --color-neutral-soft-text: #CBD5E1;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, .5);
+  --shadow-dropdown: 0 10px 30px rgba(0, 0, 0, .45);
+  --shadow-modal: 0 20px 50px rgba(0, 0, 0, .55);
+}
+
+/* El glass del header lleva blanco/negro traslúcido fijo (no una variable
+   de color de superficie) para conservar el efecto vidrio esmerilado en
+   ambos temas — por eso es la única regla de header.css que se redefine acá
+   en vez de derivarse sola de --color-surface. */
+:root[data-theme="dark"] .header {
+  background-color: rgba(15, 23, 42, .72);
+}

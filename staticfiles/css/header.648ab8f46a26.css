@@ -1,0 +1,127 @@
+/* ==========================================================================
+   HEADER
+   Barra superior fija (72px, glassmorphism) — búsqueda, breadcrumbs,
+   notificaciones, toggle de tema y menú de usuario. Se desplaza junto al
+   ancho del sidebar (ver layout.css); en móvil ocupa todo el ancho, ver
+   responsive.css.
+   ========================================================================== */
+
+.header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-width);
+  height: var(--header-height);
+  background-color: rgba(255, 255, 255, .72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  z-index: 1030;
+  transition: left var(--transition-base);
+}
+.app-shell.sidebar-collapsed .header { left: var(--sidebar-width-collapsed); }
+
+.header-toggle-btn, .header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+  position: relative;
+}
+.header-toggle-btn:hover, .header-icon-btn:hover { background-color: var(--color-bg); color: var(--color-text-primary); }
+.header-mobile-toggle { display: none; }
+
+.header-search {
+  flex: 1 1 auto;
+  max-width: 420px;
+  position: relative;
+}
+.header-search svg {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--color-text-secondary); width: var(--icon-sm); height: var(--icon-sm); pointer-events: none;
+}
+.header-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 38px;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.header-search input::placeholder { color: var(--color-text-secondary); }
+.header-search input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+  background-color: var(--color-surface);
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.breadcrumbs a { color: var(--color-text-secondary); }
+.breadcrumbs a:hover { color: var(--color-primary); }
+.breadcrumbs .current { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+
+.header-spacer { flex: 1 1 auto; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.header-badge-dot {
+  position: absolute;
+  top: 6px; right: 6px;
+  min-width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+  border: 2px solid var(--color-surface);
+}
+
+.user-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.user-menu-trigger:hover { background-color: var(--color-bg); }
+.user-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}
+.user-menu-trigger .user-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }

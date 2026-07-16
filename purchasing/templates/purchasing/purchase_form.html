@@ -1,235 +1,388 @@
 {% extends 'billing/base.html' %}
+{% load static %}
 {% block title %}{{ title }}{% endblock %}
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+{% comment %}
+Mismo bloque de estilos que billing/invoice_form.html — Select2 genera su
+propio DOM con clases fijas de la librería, no se puede re-estilizar con
+clases del design system.
+{% endcomment %}
+<style>
+.select2-container .select2-selection--single { height: 44px !important; border: 1.5px solid var(--color-border) !important; border-radius: var(--radius-input) !important; background-color: var(--color-surface) !important; }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 42px !important; padding-left: 14px !important; color: var(--color-text-primary) !important; }
+.select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px !important; }
+.select2-dropdown { border: 1.5px solid var(--color-border) !important; border-radius: var(--radius-input) !important; box-shadow: var(--shadow-dropdown) !important; }
+.select2-container--default .select2-results__option--highlighted { background-color: var(--color-primary) !important; }
+.select2-search__field { border-radius: var(--radius-sm) !important; border: 1.5px solid var(--color-border) !important; padding: 6px 10px !important; }
+.select2-container { width: 100% !important; }
+</style>
+{% endblock %}
 {% block content %}
 
-<div class="card shadow border-0 mb-4">
-  <div class="card-header bg-primary text-white fw-bold fs-5">
-    {{ title }}
-  </div>
-  <div class="card-body p-4">
-    <form method="post" id="purchase-form">
+<div class="card mb-4">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+
+    <div class="wizard-steps">
+      <div class="wizard-step-item is-active" data-step-indicator="1">
+        <span class="wizard-step-circle">1</span>
+        <span class="wizard-step-label">Proveedor</span>
+      </div>
+      <div class="wizard-step-connector" data-connector="1"></div>
+      <div class="wizard-step-item" data-step-indicator="2">
+        <span class="wizard-step-circle">2</span>
+        <span class="wizard-step-label">Detalles</span>
+      </div>
+      <div class="wizard-step-connector" data-connector="2"></div>
+      <div class="wizard-step-item" data-step-indicator="3">
+        <span class="wizard-step-circle">3</span>
+        <span class="wizard-step-label">Pago</span>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="purchase-form" class="wizard-layout">
       {% csrf_token %}
       {{ formset.management_form }}
 
-      <div class="card mb-4 border">
-        <div class="card-header bg-light fw-bold">Información de la Compra</div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label fw-bold">Proveedor</label>
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% if formset.non_form_errors %}
+        <div class="alert alert-danger">{{ formset.non_form_errors }}</div>
+      {% endif %}
+
+      <div>
+        <!-- PASO 1: PROVEEDOR Y DATOS DE LA COMPRA -->
+        <div class="wizard-step animate-fade-in" data-step="1">
+          <div class="card mb-4">
+            <div class="card-header card-header-muted">Proveedor</div>
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Proveedor</label>
+                <button type="button" class="btn btn-success btn-sm" id="quick-supplier-btn"><i data-lucide="truck"></i>Nuevo proveedor</button>
+              </div>
               {{ form.supplier }}
               {% for error in form.supplier.errors %}
                 <div class="text-danger small">{{ error }}</div>
               {% endfor %}
+
+              <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                  <label class="form-label">N° Documento del Proveedor</label>
+                  {{ form.document_number }}
+                  {% for error in form.document_number.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+                <div class="col-md-6">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label mb-0">Bodega de destino</label>
+                    <button type="button" class="btn btn-success btn-sm" id="quick-bodega-btn"><i data-lucide="warehouse"></i>Nueva bodega</button>
+                  </div>
+                  {{ form.bodega }}
+                  <div class="form-text">Opcional — dato informativo, no reparte el stock por bodega.</div>
+                  {% for error in form.bodega.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Adjuntar factura del proveedor</label>
+                  {{ form.factura_adjunta }}
+                  <div class="form-text">PDF, XML o imagen — opcional.</div>
+                  {% for error in form.factura_adjunta.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              {% comment %}
+              La fecha estimada de entrega ya no se pide a mano — se calcula
+              sola (purchase_date + 24h, ver Purchase.fecha_entrega_estimada)
+              y se muestra como un simple aviso informativo, no como campo.
+              {% endcomment %}
+              <div class="info-box mt-3 icon-text">
+                <i data-lucide="truck" class="icon-sm"></i>
+                Seguimiento automático: el pedido llegará en aproximadamente 24 horas desde que se registre la compra.
+              </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label fw-bold">N° Documento del Proveedor</label>
-              {{ form.document_number }}
-              {% for error in form.document_number.errors %}
-                <div class="text-danger small">{{ error }}</div>
-              {% endfor %}
+          </div>
+          <div class="d-flex justify-content-end gap-2 wizard-step-footer">
+            <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="button" class="btn btn-primary" data-wizard-next="2">Siguiente<i data-lucide="arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- PASO 2: DETALLES -->
+        <div class="wizard-step d-none-force" data-step="2">
+          <div class="card mb-4">
+            <div class="card-header card-header-muted">
+              <span>Detalle de la Compra</span>
+              <button type="button" class="btn btn-success btn-sm" id="add-row"><i data-lucide="circle-plus"></i>Agregar Producto</button>
             </div>
+            <div class="card-body card-body-no-bottom">
+              <label class="form-label text-small text-muted icon-text">
+                <i data-lucide="scan-barcode" class="icon-xs"></i>Búsqueda rápida / escáner de código de barras
+              </label>
+              <input type="text" id="quick-search" class="form-control mb-3" autocomplete="off"
+                     placeholder="Escanea el código de barras o escribe el nombre del producto y presiona Enter...">
+            </div>
+            <div class="table-modern-wrap">
+              <table class="table-modern" id="details-table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th class="w-100">Cantidad</th>
+                    <th class="w-150">Costo Unitario ($)</th>
+                    <th class="w-100">Descuento (%)</th>
+                    <th class="w-120">Subtotal</th>
+                    <th class="w-60">Eliminar</th>
+                  </tr>
+                </thead>
+                <tbody id="formset-body">
+                  {% for detail_form in formset %}
+                  <tr class="detail-row">
+                    <td>
+                      {{ detail_form.id }}
+                      <div class="d-flex align-items-center gap-2">
+                        <img class="img-thumb-sm product-thumb d-none-force" src="" alt="">
+                        <div class="flex-grow-1">
+                          <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
+                            <option value="">Buscar producto...</option>
+                            {% for p in detail_form.product.field.queryset %}
+                              <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                            {% endfor %}
+                          </select>
+                          <small class="text-muted product-meta d-block"></small>
+                          <small class="text-success fw-bold last-price-info d-block"></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <input type="number" name="{{ detail_form.quantity.html_name }}" class="form-control quantity-input" value="{{ detail_form.quantity.value|default:1 }}" min="1">
+                    </td>
+                    <td>
+                      <input type="number" name="{{ detail_form.unit_cost.html_name }}" class="form-control cost-input" value="{{ detail_form.unit_cost.value|default:'' }}" step="0.01" min="0.01">
+                    </td>
+                    <td>
+                      <input type="number" name="{{ detail_form.descuento_porcentaje.html_name }}" class="form-control descuento-input" value="{{ detail_form.descuento_porcentaje.value|default:0 }}" step="0.01" min="0" max="100">
+                    </td>
+                    <td class="text-end fw-bold subtotal-cell">$0.00</td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-danger btn-sm btn-icon-only remove-row">✕</button>
+                      {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between gap-2 wizard-step-footer">
+            <button type="button" class="btn btn-secondary" data-wizard-back="1"><i data-lucide="arrow-left"></i>Atrás</button>
+            <button type="button" class="btn btn-primary" data-wizard-next="3">Siguiente<i data-lucide="arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- PASO 3: PAGO -->
+        <div class="wizard-step d-none-force" data-step="3">
+          <div class="card mb-4">
+            <div class="card-header card-header-muted">Forma de Pago y Retención</div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Tipo de Pago</label>
+                  {{ form.tipo_pago }}
+                  {% for error in form.tipo_pago.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+                <div class="col-md-6 {% if form.tipo_pago.value != 'credito' %}d-none-force{% endif %}" id="meses-credito-wrapper">
+                  <label class="form-label">¿A cuántos meses se difiere?</label>
+                  {{ form.meses_credito }}
+                  {% for error in form.meses_credito.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Retención (%)</label>
+                  {{ form.retencion_porcentaje }}
+                  <div class="form-text">Puramente informativo — no genera ningún comprobante de retención del SRI.</div>
+                  {% for error in form.retencion_porcentaje.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-3 p-3 info-panel">
+                <span class="fw-bold">Neto a pagar al proveedor</span>
+                <span id="step3-neto-recap" class="fw-bold text-success fs-5">$0.00</span>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between gap-2 wizard-step-footer">
+            <button type="button" class="btn btn-secondary" data-wizard-back="2"><i data-lucide="arrow-left"></i>Atrás</button>
+            <button type="submit" class="btn btn-warning">Guardar Compra</button>
           </div>
         </div>
       </div>
 
-      <div class="card mb-4 border">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <span class="fw-bold">Detalle de la Compra</span>
-          <button type="button" class="btn btn-sm btn-success" id="add-row">
-            <i class="bi bi-plus-circle me-1"></i>Agregar Producto
-          </button>
+      <!-- PANEL LATERAL FIJO -->
+      <aside class="wizard-sidebar">
+        <div class="card mb-3">
+          <div class="card-header card-header-muted">Estado de la compra</div>
+          <div class="card-body">
+            <div class="phase-progress">
+              <div class="phase-progress-item is-current">
+                <span class="phase-progress-dot"></span>
+                <span class="phase-progress-label">Borrador</span>
+              </div>
+              <div class="phase-progress-connector"></div>
+              <div class="phase-progress-item">
+                <span class="phase-progress-dot"></span>
+                <span class="phase-progress-label">Confirmada</span>
+              </div>
+              <div class="phase-progress-connector"></div>
+              <div class="phase-progress-item">
+                <span class="phase-progress-dot"></span>
+                <span class="phase-progress-label">Recibida</span>
+              </div>
+              <div class="phase-progress-connector"></div>
+              <div class="phase-progress-item">
+                <span class="phase-progress-dot"></span>
+                <span class="phase-progress-label">Pagada</span>
+              </div>
+            </div>
+            <div class="form-text mt-2">La compra se guarda en Borrador. El stock se actualiza recién al marcarla como Recibida.</div>
+          </div>
         </div>
-        <div class="card-body p-0">
-          <table class="table table-bordered mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Producto</th>
-                <th style="width:120px;">Cantidad</th>
-                <th style="width:150px;">Costo Unitario ($)</th>
-                <th style="width:120px;">Subtotal</th>
-                <th style="width:60px;">Eliminar</th>
-              </tr>
-            </thead>
-            <tbody id="formset-body">
-              {% for detail_form in formset %}
-              <tr class="detail-row">
-                <td>
-                  {{ detail_form.id }}
-                  <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
-                    <option value="">---------</option>
-                    {% for p in detail_form.product.field.queryset %}
-                      <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
-                    {% endfor %}
-                  </select>
-                  <small class="text-muted stock-info"></small>
-                </td>
-                <td>
-                  <input type="number" name="{{ detail_form.quantity.html_name }}"
-                    class="form-control quantity-input"
-                    value="{{ detail_form.quantity.value|default:1 }}" min="1">
-                </td>
-                <td>
-                  <input type="number" name="{{ detail_form.unit_cost.html_name }}"
-                    class="form-control cost-input"
-                    value="{{ detail_form.unit_cost.value|default:'' }}" step="0.01" min="0.01">
-                </td>
-                <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-                <td class="text-center align-middle">
-                  {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
-                  <button type="button" class="btn btn-sm btn-danger remove-row">✕</button>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      <div class="d-flex justify-content-end mb-4">
-        <div class="card border" style="min-width:280px;">
+        <div class="card card-summary">
+          <div class="card-header card-header-muted">Totales</div>
           <div class="card-body">
             <div class="d-flex justify-content-between mb-2">
               <span>Subtotal:</span>
               <span id="summary-subtotal" class="fw-bold">$0.00</span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span>IVA (15%):</span>
+              <span id="summary-tax-label">IVA:</span>
               <span id="summary-tax" class="fw-bold">$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span>Total:</span>
+              <span id="summary-total" class="fw-bold">$0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span>Retención:</span>
+              <span id="summary-retencion" class="fw-bold text-danger">-$0.00</span>
             </div>
             <hr>
             <div class="d-flex justify-content-between fs-5">
-              <span class="fw-bold">Total:</span>
-              <span id="summary-total" class="fw-bold text-success">$0.00</span>
+              <span class="fw-bold">Neto a pagar:</span>
+              <span id="summary-neto" class="fw-bold text-success">$0.00</span>
+            </div>
+            <div id="summary-credito-box" class="d-none-force">
+              <hr>
+              <div class="d-flex justify-content-between mb-2">
+                <span>Interés estimado:</span>
+                <span id="summary-interes" class="fw-bold">$0.00</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span>Total a pagar (con interés):</span>
+                <span id="summary-total-credito" class="fw-bold">$0.00</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span>Cuota mínima mensual:</span>
+                <span id="summary-cuota-minima" class="fw-bold text-primary">$0.00</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="d-flex justify-content-end gap-2">
-        <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
-        <button type="submit" class="btn btn-primary px-4 fw-bold">Guardar Compra</button>
-      </div>
+      </aside>
     </form>
+  </div>
+</div>
+
+<!-- Alta rápida de proveedor: crea un Supplier por AJAX sin salir del wizard
+     (ver billing/views.py -> supplier_quick_create). El proveedor nuevo
+     queda seleccionado en el paso 1 sin recargar la página. -->
+<div class="modal fade" id="quickSupplierModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="truck" class="icon-md icon-success"></i>Nuevo Proveedor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="quick-supplier-feedback" class="alert alert-danger d-none-force"></div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Nombre de la empresa</label>
+            <input type="text" id="qs-name" name="name" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Persona de contacto</label>
+            <input type="text" id="qs-contact-name" name="contact_name" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Correo Electrónico</label>
+            <input type="email" id="qs-email" name="email" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono</label>
+            <input type="text" id="qs-phone" name="phone" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Dirección</label>
+            <input type="text" id="qs-address" name="address" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="quick-supplier-save">Crear y Seleccionar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alta rápida de bodega: crea una Bodega por AJAX sin salir del wizard
+     (ver purchasing/views.py -> bodega_quick_create). La bodega nueva queda
+     seleccionada en el paso 1 sin recargar la página — hoy es la ÚNICA forma
+     de crear bodegas fuera de /admin/. -->
+<div class="modal fade" id="quickBodegaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="warehouse" class="icon-md icon-success"></i>Nueva Bodega</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="quick-bodega-feedback" class="alert alert-danger d-none-force"></div>
+        <label class="form-label">Nombre de la bodega</label>
+        <input type="text" id="qb-nombre" name="nombre" class="form-control" placeholder="Ej: Bodega Central">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="quick-bodega-save">Crear y Seleccionar</button>
+      </div>
+    </div>
   </div>
 </div>
 
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-const SUPPLIERS_PRODUCTS = {{ suppliers_products_json|safe }};
-let formIndex = {{ formset.total_form_count }};
-
-// Filtrar productos por proveedor (solo visual)
-function filterProducts(selectElement, supplierId) {
-  const products = SUPPLIERS_PRODUCTS[supplierId] || [];
-  const currentVal = selectElement.value;
-  
-  // Ocultar/mostrar opciones según proveedor
-  Array.from(selectElement.options).forEach(opt => {
-    if (opt.value === '') return;
-    if (!supplierId || products.find(p => p.id == opt.value)) {
-      opt.style.display = '';
-    } else {
-      opt.style.display = 'none';
-    }
-  });
-
-  // Si el valor actual no pertenece al proveedor, resetear
-  if (supplierId && currentVal && !products.find(p => p.id == currentVal)) {
-    selectElement.value = '';
-  }
-}
-
-// Cuando cambia el proveedor
-document.getElementById('id_supplier').addEventListener('change', function() {
-  const supplierId = this.value;
-  document.querySelectorAll('.product-select').forEach(sel => {
-    filterProducts(sel, supplierId);
-  });
-  calcTotals();
-});
-
-// Inicializar filtro con proveedor actual
-const initialSupplier = document.getElementById('id_supplier').value;
-if (initialSupplier) {
-  document.querySelectorAll('.product-select').forEach(sel => {
-    filterProducts(sel, initialSupplier);
-  });
-}
-
-function calcRow(row) {
-  const qty = parseFloat(row.querySelector('.quantity-input').value) || 0;
-  const cost = parseFloat(row.querySelector('.cost-input').value) || 0;
-  const sub = qty * cost;
-  row.querySelector('.subtotal-cell').textContent = '$' + sub.toFixed(2);
-  return sub;
-}
-
-function calcTotals() {
-  let subtotal = 0;
-  document.querySelectorAll('.detail-row').forEach(row => subtotal += calcRow(row));
-  const tax = subtotal * 0.15;
-  document.getElementById('summary-subtotal').textContent = '$' + subtotal.toFixed(2);
-  document.getElementById('summary-tax').textContent = '$' + tax.toFixed(2);
-  document.getElementById('summary-total').textContent = '$' + (subtotal + tax).toFixed(2);
-}
-
-function bindRow(row) {
-  row.querySelector('.quantity-input').addEventListener('input', function() {
-    if (this.value < 1) this.value = 1;
-    calcTotals();
-  });
-  row.querySelector('.cost-input').addEventListener('input', calcTotals);
-  row.querySelector('.remove-row').addEventListener('click', function() {
-    row.remove();
-    document.getElementById('id_details-TOTAL_FORMS').value = document.querySelectorAll('.detail-row').length;
-    calcTotals();
-  });
-}
-
-// Inicializar filas existentes
-document.querySelectorAll('.detail-row').forEach(row => bindRow(row));
-calcTotals();
-
-// Agregar fila nueva
-document.getElementById('add-row').addEventListener('click', function() {
-  const tbody = document.getElementById('formset-body');
-  const supplierId = document.getElementById('id_supplier').value;
-  const products = supplierId ? (SUPPLIERS_PRODUCTS[supplierId] || []) : 
-    Object.values(SUPPLIERS_PRODUCTS).flat();
-
-  // Obtener todas las opciones de productos del primer select
-  const firstSelect = document.querySelector('.product-select');
-  let optionsHtml = '<option value="">---------</option>';
-  if (firstSelect) {
-    Array.from(firstSelect.options).forEach(opt => {
-      if (opt.value) {
-        optionsHtml += `<option value="${opt.value}">${opt.text}</option>`;
-      }
-    });
-  }
-
-  const row = document.createElement('tr');
-  row.className = 'detail-row';
-  row.innerHTML = `
-    <td>
-      <input type="hidden" name="details-${formIndex}-id" value="">
-      <select name="details-${formIndex}-product" class="form-select product-select">
-        ${optionsHtml}
-      </select>
-      <small class="text-muted stock-info"></small>
-    </td>
-    <td><input type="number" name="details-${formIndex}-quantity" class="form-control quantity-input" value="1" min="1"></td>
-    <td><input type="number" name="details-${formIndex}-unit_cost" class="form-control cost-input" step="0.01" min="0.01"></td>
-    <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger remove-row">✕</button></td>
-  `;
-  tbody.appendChild(row);
-  filterProducts(row.querySelector('.product-select'), supplierId);
-  bindRow(row);
-  document.getElementById('id_details-TOTAL_FORMS').value = ++formIndex;
-});
+window.PURCHASE_WIZARD_DATA = {
+  suppliersProducts: {{ suppliers_products_json|safe }},
+  ivaFraccion: {{ iva_fraccion_json|safe }},
+  retencionDefault: {{ retencion_porcentaje_default_json|safe }},
+  formIndex: {{ formset.total_form_count }},
+  quickCreateUrl: '{% url "billing:supplier_quick_create" %}',
+  bodegaQuickCreateUrl: '{% url "purchasing:bodega_quick_create" %}',
+};
 </script>
+<script src="{% static 'js/purchase-wizard.js' %}"></script>
 {% endblock %}

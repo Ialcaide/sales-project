@@ -1,0 +1,68 @@
+{% extends 'billing/base.html' %}
+{% block title %}Facturas Pendientes{% endblock %}
+{% block breadcrumbs %}<span class="current">Facturas Pendientes</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Facturas Pendientes de Cobro</h2>
+  <a href="{% url 'cobros:cobro_list' %}" class="btn btn-secondary"><i data-lucide="history"></i>Historial de Cobros</a>
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Apellido del cliente...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query %}
+      <a href="{% url 'cobros:invoice_pending_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>N° Factura</th><th>Cliente</th><th>Fecha</th><th class="text-end">Total</th><th class="text-end">Saldo Pendiente</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ item.id|stringformat:"04d" }}</td>
+          <td>{{ item.customer }}</td>
+          <td>{{ item.invoice_date|date:"d/m/Y" }}</td>
+          <td class="text-end">${{ item.total }}</td>
+          <td class="text-end fw-bold text-danger">${{ item.saldo }}</td>
+          <td>
+            <div class="row-actions">
+              <a href="{% url 'cobros:cobro_create' item.pk %}" class="row-action-btn icon-success" title="Registrar Cobro"><i data-lucide="coins"></i></a>
+              {% with ultimo_cobro=item.cobros.first %}
+                {% if ultimo_cobro and perms.cobros.change_cobrofactura %}
+                  <a href="{% url 'cobros:cobro_update' ultimo_cobro.pk %}" class="row-action-btn" title="Editar el último cobro registrado"><i data-lucide="pencil"></i></a>
+                {% endif %}
+              {% endwith %}
+              {% if perms.billing.view_invoice %}
+                <a href="{% url 'billing:invoice_detail' item.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+              {% endif %}
+              {% if perms.billing.send_whatsapp_invoice and item.whatsapp_recordatorio_url %}
+                <a href="{{ item.whatsapp_recordatorio_url }}" target="_blank" rel="noopener" class="row-action-btn text-whatsapp" title="Abre WhatsApp con un recordatorio de pago ya redactado">
+                  {% include 'partials/icon_whatsapp.html' %}
+                </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="7">No hay facturas pendientes de cobro</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

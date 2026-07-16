@@ -1,0 +1,64 @@
+{% extends 'billing/base.html' %}
+{% block title %}Historial de Caja{% endblock %}
+{% block breadcrumbs %}<span class="current">Caja</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Historial de Caja</h2>
+  <a href="{% url 'caja:caja_abrir' %}" class="btn btn-primary"><i data-lucide="unlock"></i>Abrir Caja</a>
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Usuario...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query %}
+      <a href="{% url 'caja:caja_historial' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>Usuario</th><th>Apertura</th><th class="text-end">Monto Inicial</th><th>Cierre</th><th class="text-end">Diferencia</th><th>Estado</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>{{ item.usuario }}</td>
+          <td>{{ item.fecha_apertura|date:"d/m/Y H:i" }}</td>
+          <td class="text-end">${{ item.monto_inicial }}</td>
+          <td>{{ item.fecha_cierre|date:"d/m/Y H:i"|default:"-" }}</td>
+          <td class="text-end">
+            {% if item.diferencia != None %}${{ item.diferencia }}{% else %}-{% endif %}
+          </td>
+          <td>
+            {% if item.estado == 'abierta' %}
+              <span class="badge badge-success">Abierta</span>
+            {% else %}
+              <span class="badge badge-neutral">Cerrada</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if perms.caja.view_sesioncaja %}
+              <a href="{% url 'caja:caja_detalle' item.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="8">No hay sesiones de caja registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

@@ -4,16 +4,16 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
-    <div class="card shadow border-0">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <div class="card">
+      <div class="card-header">
         <h4 class="mb-0">Detalle del cliente</h4>
         {% if customer.is_active %}
-          <span class="badge bg-success">Activo</span>
+          <span class="badge badge-success">Activo</span>
         {% else %}
-          <span class="badge bg-danger">Inactivo</span>
+          <span class="badge badge-error">Inactivo</span>
         {% endif %}
       </div>
-      <div class="card-body p-4">
+      <div class="card-body">
         <div class="row mb-3">
           <div class="col-md-6">
             <p class="text-muted small mb-1">Nombre completo</p>
@@ -40,6 +40,27 @@
           <p>{{ customer.address|default:"No registrada" }}</p>
         </div>
         <hr>
+        <h5 class="mb-3">Crédito</h5>
+        <div class="row mb-3">
+          <div class="col-md-4">
+            <p class="text-muted small mb-1">Límite de crédito</p>
+            <p class="fw-bold">${{ customer.limite_credito }}</p>
+          </div>
+          <div class="col-md-4">
+            <p class="text-muted small mb-1">Deuda actual</p>
+            <p class="fw-bold text-danger">${{ customer.deuda_actual_credito }}</p>
+          </div>
+          <div class="col-md-4">
+            <p class="text-muted small mb-1">Disponible</p>
+            <p class="fw-bold text-success">${{ customer.credito_disponible }}</p>
+          </div>
+        </div>
+        <p class="text-muted small mb-1">
+          Total histórico comprado: <strong>${{ customer.total_comprado_historico }}</strong>
+          — el límite crece automáticamente un 30% de este monto sobre la base configurada
+          {% if customer.profile %}(${{ customer.profile.credit_limit }}){% else %}(sin perfil, base $0){% endif %}.
+        </p>
+        <hr>
         <div class="row">
           <div class="col-md-6">
             <p class="text-muted small mb-1">Fecha de registro</p>
@@ -52,36 +73,31 @@
         </div>
         <hr>
         <h5 class="mb-3">Facturas del cliente</h5>
-        <table class="table table-sm table-hover">
-          <thead class="table-dark">
-            <tr>
-              <th>#</th>
-              <th>Fecha</th>
-              <th class="text-end">Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for inv in customer.invoices.all %}
-            <tr>
-              <td>{{ inv.id }}</td>
-              <td>{{ inv.invoice_date|date:"d/m/Y" }}</td>
-              <td class="text-end fw-bold">${{ inv.total }}</td>
-              <td>
-                <a href="{% url 'billing:invoice_detail' inv.pk %}" class="btn btn-sm btn-info">Ver</a>
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" class="text-center text-muted">Sin facturas</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div class="table-modern-wrap">
+          <table class="table-modern">
+            <thead><tr><th>#</th><th>Fecha</th><th class="text-end">Total</th><th></th></tr></thead>
+            <tbody>
+              {% for inv in customer.invoices.all %}
+              <tr>
+                <td>{{ inv.id }}</td>
+                <td>{{ inv.invoice_date|date:"d/m/Y" }}</td>
+                <td class="text-end fw-bold">${{ inv.total }}</td>
+                <td><a href="{% url 'billing:invoice_detail' inv.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a></td>
+              </tr>
+              {% empty %}
+              <tr class="empty-row"><td colspan="4">Sin facturas</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
       </div>
-     <div class="card-footer d-flex gap-2">
-        <a href="{% url 'billing:customer_list' %}" class="btn btn-outline-secondary">Volver</a>
-        {% if user|has_group:'Administrador' or user.is_superuser %}
-          <a href="{% url 'billing:customer_update' customer.pk %}" class="btn btn-warning">Editar</a>
-          <a href="{% url 'billing:customer_delete' customer.pk %}" class="btn btn-danger">Borrar</a>
+      <div class="card-footer d-flex gap-2">
+        <a href="{% url 'billing:customer_list' %}" class="btn btn-secondary">Volver</a>
+        {% if perms.billing.change_customer %}
+          <a href="{% url 'billing:customer_update' customer.pk %}" class="btn btn-warning"><i data-lucide="pencil"></i>Editar</a>
+        {% endif %}
+        {% if perms.billing.delete_customer %}
+          <a href="{% url 'billing:customer_delete' customer.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Borrar</a>
         {% endif %}
       </div>
     </div>

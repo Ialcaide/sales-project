@@ -1,63 +1,29 @@
 {% extends 'billing/base.html' %}
+{% load icon_map %}
 {% block title %}Gestión de Permisos{% endblock %}
-
-{% block extra_css %}
-<style>
-  .role-list .list-group-item {
-    cursor: pointer;
-    border-left: 3px solid transparent;
-  }
-  .role-list .list-group-item.active {
-    background: #eef2ff;
-    border-left-color: #4f46e5;
-    color: #1e1b4b;
-    font-weight: 600;
-  }
-  .perm-card {
-    border-radius: 12px;
-    transition: box-shadow 0.15s ease;
-  }
-  .perm-card:hover {
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-  }
-  .perm-card .card-header {
-    background: #f8fafc;
-    font-weight: 600;
-  }
-  .perm-check {
-    cursor: pointer;
-    user-select: none;
-    border-radius: 8px;
-    padding: 6px 10px;
-    transition: background-color 0.1s ease;
-  }
-  .perm-check:hover {
-    background-color: #f1f5f9;
-  }
-</style>
-{% endblock %}
+{% block breadcrumbs %}<span class="current">Seguridad</span> / <span class="current">Permisos</span>{% endblock %}
 
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="list-header">
   <div>
-    <h2 class="mb-0">Gestión de Permisos</h2>
+    <h2 class="mb-1">Gestión de Permisos</h2>
     <p class="text-muted small mb-0">Elige un rol o usuario a la izquierda y marca sus permisos por módulo.</p>
   </div>
-  <div class="d-flex gap-2">
-    <a href="{% url 'security:register' %}" class="btn btn-success"><i class="bi bi-person-plus-fill me-1"></i>Nuevo Usuario</a>
-    <a href="{% url 'security:permission_create' %}" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i>Nuevo Permiso</a>
-    <a href="?export=pdf" class="btn btn-danger">PDF</a>
-    <a href="?export=excel" class="btn btn-success">Excel</a>
+  <div class="list-header-actions">
+    <a href="?export=pdf" class="btn btn-outline-danger btn-sm"><i data-lucide="file-text"></i>PDF</a>
+    <a href="?export=excel" class="btn btn-outline-secondary btn-sm"><i data-lucide="file-spreadsheet"></i>Excel</a>
+    <a href="{% url 'security:permission_create' %}" class="btn btn-secondary"><i data-lucide="circle-plus"></i>Nuevo Permiso</a>
+    <a href="{% url 'security:register' %}" class="btn btn-primary"><i data-lucide="user-plus"></i>Nuevo Usuario</a>
   </div>
 </div>
 
 <div class="row g-3">
   <!-- IZQUIERDA: Roles y Usuarios -->
   <div class="col-lg-3">
-    <div class="card shadow-sm border-0 mb-3">
-      <div class="card-header bg-white fw-bold"><i class="bi bi-shield-check text-primary me-1"></i>Roles</div>
-      <div class="list-group list-group-flush role-list">
+    <div class="card mb-3">
+      <div class="card-header"><span class="icon-text"><i data-lucide="shield-check" class="icon-sm icon-primary"></i>Roles</span></div>
+      <div class="list-group">
         {% for g in groups %}
           <a href="?target_type=group&target_id={{ g.id }}" class="list-group-item list-group-item-action {% if target_type == 'group' and target.id == g.id %}active{% endif %}">
             {{ g.name }}
@@ -68,15 +34,15 @@
       </div>
     </div>
 
-    <div class="card shadow-sm border-0">
-      <div class="card-header bg-white fw-bold"><i class="bi bi-person text-info me-1"></i>Usuarios</div>
-      <div class="card-body pb-2">
+    <div class="card">
+      <div class="card-header"><span class="icon-text"><i data-lucide="user" class="icon-sm icon-info"></i>Usuarios</span></div>
+      <div class="card-body card-body-tight">
         <form method="get" class="d-flex gap-1">
           <input type="text" name="user_q" value="{{ user_q }}" class="form-control form-control-sm" placeholder="Buscar usuario...">
-          <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
+          <button type="submit" class="btn btn-secondary btn-sm btn-icon-only"><i data-lucide="search"></i></button>
         </form>
       </div>
-      <div class="list-group list-group-flush role-list" style="max-height:320px; overflow-y:auto;">
+      <div class="list-group list-group-scroll">
         {% for u in filtered_users %}
           <a href="?target_type=user&target_id={{ u.id }}&user_q={{ user_q }}" class="list-group-item list-group-item-action {% if target_type == 'user' and target.id == u.id %}active{% endif %}">
             {{ u.username }}
@@ -93,23 +59,21 @@
     {% if target %}
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
         <div>
-          <span class="badge {% if target_type == 'group' %}bg-primary{% else %}bg-info{% endif %} fs-6">
-            <i class="bi {% if target_type == 'group' %}bi-shield-check{% else %}bi-person-fill{% endif %} me-1"></i>
+          <span class="badge badge-lg {% if target_type == 'group' %}badge-primary{% else %}badge-info{% endif %}">
+            <i data-lucide="{% if target_type == 'group' %}shield-check{% else %}user{% endif %}"></i>
             {% if target_type == 'group' %}Rol: {{ target.name }}{% else %}Usuario: {{ target.username }}{% endif %}
           </span>
         </div>
         <div class="d-flex gap-2 align-items-center">
-          <input type="text" id="model-filter" class="form-control form-control-sm" style="max-width:220px;" placeholder="Buscar módulo...">
+          <input type="text" id="model-filter" class="form-control form-control-sm max-w-220" placeholder="Buscar módulo...">
           {% if target_type == 'user' %}
-          <a href="{% url 'security:user_update' target.id %}" class="btn btn-sm btn-outline-warning">
-            <i class="bi bi-pencil-fill me-1"></i>Editar Usuario
-          </a>
+          <a href="{% url 'security:user_update' target.id %}" class="btn btn-secondary btn-sm"><i data-lucide="pencil"></i>Editar Usuario</a>
           <form method="post" class="d-inline">
             {% csrf_token %}
             <input type="hidden" name="grant_all_user_id" value="{{ target.id }}">
-            <button type="submit" class="btn btn-sm btn-warning"
+            <button type="submit" class="btn btn-warning btn-sm"
                     onclick="return confirm('¿Dar TODOS los permisos del sistema a &quot;{{ target.username }}&quot;?');">
-              <i class="bi bi-unlock-fill me-1"></i>Dar acceso a todos los permisos
+              <i data-lucide="unlock"></i>Dar acceso a todos los permisos
             </button>
           </form>
           {% endif %}
@@ -118,8 +82,8 @@
 
       {% if target_type == 'user' %}
         <p class="text-muted small mb-3">
-          <i class="bi bi-info-circle me-1"></i>
-          Los permisos marcados con <span class="badge bg-light text-secondary border"><i class="bi bi-lock-fill"></i> vía rol</span>
+          <i data-lucide="info" class="icon-xs"></i>
+          Los permisos marcados con <span class="badge badge-neutral"><i data-lucide="lock"></i>vía rol</span>
           ya están activos porque vienen del rol asignado a este usuario. Marca casillas adicionales para darle permisos extra, solo a él.
         </p>
       {% endif %}
@@ -132,35 +96,27 @@
         <div class="row g-3" id="model-cards">
           {% for key, card in model_cards.items %}
           <div class="col-md-6 col-xl-4 model-card-wrapper" data-model-label="{{ card.label|lower }}">
-            <div class="card perm-card shadow-sm h-100">
-              <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card h-100">
+              <div class="card-header">
                 <span>{{ card.label }}</span>
-                <span class="badge bg-light text-secondary border">{{ card.app_label }}</span>
+                <span class="badge badge-neutral">{{ card.app_label }}</span>
               </div>
-              <div class="card-body py-2">
+              <div class="card-body card-body-tight">
                 {% for item in card.items %}
                   <div class="d-flex align-items-center mb-1">
                     <label class="perm-check d-flex align-items-center gap-2 flex-grow-1 mb-0 {% if item.locked %}text-muted{% endif %}">
                       <input type="checkbox" class="form-check-input" name="perm_ids" value="{{ item.id }}"
                              {% if item.checked %}checked{% endif %} {% if item.locked %}disabled{% endif %}>
-                      <i class="bi {{ item.icon }}"></i>
+                      <i data-lucide="{{ item.icon|to_lucide }}" class="icon-xs icon-muted"></i>
                       <span>{{ item.label }}</span>
                       {% if item.locked %}
-                        <span class="badge bg-light text-secondary border" title="Activo por su rol">
-                          <i class="bi bi-lock-fill"></i> vía rol
-                        </span>
+                        <span class="badge badge-neutral" title="Activo por su rol"><i data-lucide="lock"></i>vía rol</span>
                       {% endif %}
                     </label>
-                    <div class="btn-group ms-1">
-                      <a href="{% url 'security:permission_detail' item.id %}" class="btn btn-sm btn-outline-info" title="Ver">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="{% url 'security:permission_update' item.id %}" class="btn btn-sm btn-outline-warning" title="Editar definición">
-                        <i class="bi bi-pencil"></i>
-                      </a>
-                      <a href="{% url 'security:permission_delete' item.id %}" class="btn btn-sm btn-outline-danger" title="Eliminar definición">
-                        <i class="bi bi-trash"></i>
-                      </a>
+                    <div class="row-actions">
+                      <a href="{% url 'security:permission_detail' item.id %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+                      <a href="{% url 'security:permission_update' item.id %}" class="row-action-btn" title="Editar definición"><i data-lucide="pencil"></i></a>
+                      <a href="{% url 'security:permission_delete' item.id %}" class="row-action-btn danger" title="Eliminar definición"><i data-lucide="trash-2"></i></a>
                     </div>
                   </div>
                 {% endfor %}
@@ -168,22 +124,64 @@
             </div>
           </div>
           {% empty %}
-          <div class="col-12 text-center text-muted py-5">
-            <i class="bi bi-exclamation-circle fs-3 mb-2 d-block"></i>
+          <div class="col-12 empty-state">
+            <i data-lucide="circle-alert"></i>
             No hay permisos definidos.
           </div>
           {% endfor %}
         </div>
 
         <div class="d-flex justify-content-end mt-3">
-          <button type="submit" class="btn btn-success px-4 py-2">
-            <i class="bi bi-check-circle-fill me-2"></i>Guardar Cambios
-          </button>
+          {% if target_type == 'group' %}
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmRoleModal">
+              <i data-lucide="check-circle"></i>Guardar Cambios
+            </button>
+          {% else %}
+            <button type="submit" class="btn btn-success">
+              <i data-lucide="check-circle"></i>Guardar Cambios
+            </button>
+          {% endif %}
         </div>
       </form>
+
+      {% if target_type == 'group' %}
+      <!-- Cartel de confirmación: un cambio en los permisos de un ROL afecta
+           de inmediato a TODOS los usuarios que lo tienen asignado (Django
+           revisa los permisos del grupo en cada request, no hay "copias"
+           por usuario que sincronizar) — este modal solo avisa el alcance
+           del cambio antes de guardarlo. -->
+      <div class="modal fade" id="confirmRoleModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title"><span class="icon-text"><i data-lucide="triangle-alert" class="icon-md icon-warning"></i>Confirmar cambio de permisos</span></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="modal-body">
+              <p>Estás por cambiar los permisos del rol <strong>"{{ target.name }}"</strong>.</p>
+              {% if role_users %}
+                <p>Este cambio se aplicará <strong>de inmediato</strong> a los {{ role_users|length }} usuario(s) que tienen este rol:</p>
+                <div class="mb-2">
+                  {% for u in role_users %}
+                    <span class="badge badge-info me-1 mb-1">{{ u.username }}</span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-muted mb-0">Actualmente ningún usuario tiene este rol asignado, así que este cambio no afecta a nadie todavía.</p>
+              {% endif %}
+              <p class="text-muted small mb-0 mt-2">¿Deseas continuar?</p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" form="perm-form" class="btn btn-success"><i data-lucide="check-circle"></i>Sí, aplicar cambios</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
     {% else %}
-      <div class="text-center text-muted py-5">
-        <i class="bi bi-arrow-left-circle fs-3 mb-2 d-block"></i>
+      <div class="empty-state">
+        <i data-lucide="circle-arrow-left"></i>
         Elige un rol o usuario a la izquierda para ver y editar sus permisos.
       </div>
     {% endif %}
@@ -193,7 +191,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script defer>
+document.addEventListener('DOMContentLoaded', function () {
   const modelFilter = document.getElementById('model-filter');
   if (modelFilter) {
     modelFilter.addEventListener('input', function() {
@@ -204,5 +203,6 @@
       });
     });
   }
+});
 </script>
 {% endblock %}

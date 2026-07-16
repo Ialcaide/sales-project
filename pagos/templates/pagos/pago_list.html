@@ -1,0 +1,79 @@
+{% extends 'billing/base.html' %}
+{% block title %}Historial de Pagos{% endblock %}
+{% block breadcrumbs %}<span class="current">Pagos a Proveedores</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>
+    Historial de Pagos a Proveedores
+    {% if compra_filtro %}
+      <small class="text-muted fs-6">— Compra #{{ compra_filtro.id|stringformat:"04d" }} ({{ compra_filtro.document_number }})</small>
+    {% endif %}
+  </h2>
+  <a href="{% url 'pagos:purchase_pending_list' %}" class="btn btn-secondary"><i data-lucide="hourglass"></i>Compras Pendientes</a>
+</div>
+
+{% if compra_filtro %}
+  <div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>Mostrando solo los pagos de la compra <strong>#{{ compra_filtro.id|stringformat:"04d" }}</strong> — Saldo actual: <strong>${{ compra_filtro.saldo }}</strong></span>
+    <a href="{% url 'pagos:pago_list' %}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
+  </div>
+{% endif %}
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="N° documento de la compra...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query or compra_filtro %}
+      <a href="{% url 'pagos:pago_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>Compra</th><th>Proveedor</th><th>Fecha de Pago</th><th class="text-end">Valor</th><th>Forma de Pago</th><th>Observación</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ item.compra_id|stringformat:"04d" }} ({{ item.compra.document_number }})</td>
+          <td>{{ item.compra.supplier.name }}</td>
+          <td>{{ item.fecha|date:"d/m/Y" }}</td>
+          <td class="text-end fw-bold">${{ item.valor }}</td>
+          <td>{{ item.get_forma_pago_display }}</td>
+          <td>{{ item.observacion|default:"-" }}</td>
+          <td>
+            <div class="row-actions">
+              {% if perms.pagos.view_pagocompra %}
+                <a href="{% url 'pagos:pago_pdf' item.pk %}" class="row-action-btn" title="Descargar comprobante" target="_blank"><i data-lucide="printer"></i></a>
+              {% endif %}
+              {% if perms.pagos.change_pagocompra %}
+                <a href="{% url 'pagos:pago_update' item.pk %}" class="row-action-btn" title="Editar"><i data-lucide="pencil"></i></a>
+              {% endif %}
+              {% if perms.pagos.delete_pagocompra %}
+                <button type="button" class="row-action-btn danger" title="Eliminar" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                        data-delete-url="{% url 'pagos:pago_delete' item.pk %}" data-delete-label="este pago">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="8">No hay pagos registrados</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

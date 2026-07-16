@@ -1,0 +1,30 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Notificación general — plantilla reutilizable para cualquier mensaje del
+sistema que no tenga una plantilla dedicada. Todo el contenido variable
+(título, ícono, mensaje, alerta, botón) viene por contexto.
+Variables: usuario, icono (emoji, opcional, default &#128276;), titulo,
+subtitulo, mensaje (puede traer HTML simple, se renderiza con |safe),
+tipo_alerta (opcional: "success"|"warning"|"error"|"info"),
+texto_alerta (opcional, acompaña a tipo_alerta), boton_url (opcional),
+boton_texto (opcional, default "Ver más").
+{% endcomment %}
+
+{% block preheader %}{{ subtitulo|default:titulo }}{% endblock %}
+
+{% block header_icon %}
+<div style="width:56px; height:56px; border-radius:50%; background-color:rgba(255,255,255,.16); text-align:center; line-height:56px; font-size:26px; margin:0 auto 16px;">{{ icono|default:"&#128276;"|safe }}</div>
+{% endblock %}
+{% block header_title %}{{ titulo }}{% endblock %}
+{% block header_subtitle %}{{ subtitulo }}{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#111827;">Hola {{ usuario }},</p>
+<p style="margin:0 0 8px; font-size:15px; line-height:1.7; color:#374151;">
+  {{ mensaje|safe }}
+</p>
+
+{% if tipo_alerta %}{% include "emails/partials/_alert.html" with tipo=tipo_alerta texto=texto_alerta %}{% endif %}
+
+{% if boton_url %}{% include "emails/partials/_button.html" with url=boton_url label=boton_texto|default:"Ver más" %}{% endif %}
+{% endblock %}

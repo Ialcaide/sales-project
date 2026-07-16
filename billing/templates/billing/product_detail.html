@@ -1,72 +1,53 @@
 {% extends 'billing/base.html' %}
 {% block title %}{{ product.name }}{% endblock %}
 {% block content %}
-<div class="card shadow mb-4">
-  <div class="card-header bg-primary text-white">
-    <h4 class="mb-0">{{ product.name }}</h4>
-  </div>
+<div class="card mb-4">
+  <div class="card-header"><h4 class="mb-0">{{ product.name }}</h4></div>
   <div class="card-body">
     <div class="row">
       <div class="col-md-5 text-center">
-      {% if product.image %}
-  <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
-{% else %}
-  <img src="{{ product.placeholder_image }}" alt="{{ product.name }}" class="img-fluid rounded shadow" style="max-height:400px; object-fit:cover;">
-{% endif %}
+        {% if product.image %}
+          <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-detail">
+        {% else %}
+          <img src="{{ product.placeholder_image }}" alt="{{ product.name }}" class="img-detail">
+        {% endif %}
       </div>
       <div class="col-md-7">
-        <table class="table">
-          <tr>
-            <th style="width:160px;">Nombre</th>
-            <td>{{ product.name }}</td>
-          </tr>
-          <tr>
-            <th>Descripción</th>
-            <td>{{ product.description|default:"-" }}</td>
-          </tr>
-          <tr>
-            <th>Marca</th>
-            <td>{{ product.brand.name }}</td>
-          </tr>
-          <tr>
-            <th>Grupo</th>
-            <td>{{ product.group.name }}</td>
-          </tr>
-          <tr>
-            <th>Precio unitario</th>
-            <td>${{ product.unit_price }}</td>
-          </tr>
-          <tr>
-            <th>Stock</th>
-            <td>{{ product.stock }}</td>
-          </tr>
+        <table class="table-kv">
+          <tr><th>Nombre</th><td>{{ product.name }}</td></tr>
+          <tr><th>Descripción</th><td>{{ product.description|default:"-" }}</td></tr>
+          <tr><th>Marca</th><td>{{ product.brand.name }}</td></tr>
+          <tr><th>Grupo</th><td>{{ product.group.name }}</td></tr>
+          <tr><th>Precio unitario</th><td>${{ product.unit_price }}</td></tr>
+          <tr><th>Stock</th><td>{{ product.stock }}</td></tr>
           <tr>
             <th>Proveedores</th>
             <td>
               {% for s in product.suppliers.all %}
-                <span class="badge bg-info">{{ s.name }}</span>
+                <span class="badge badge-info">{{ s.name }}</span>
               {% empty %}
                 <span class="text-muted">Ninguno</span>
               {% endfor %}
             </td>
           </tr>
           <tr>
-  <th>Último costo de compra</th>
-  <td>
-    {% if product.last_cost %}
-      ${{ product.last_cost }}
-    {% else %}
-      <span class="text-muted">Sin compras registradas</span>
-    {% endif %}
-  </td>
-</tr>
+            <th>Último costo de compra</th>
+            <td>
+              {% if product.last_cost %}
+                ${{ product.last_cost }}
+              {% else %}
+                <span class="text-muted">Sin compras registradas</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr><th>Código de barras</th><td>{{ product.barcode|default:"-" }}</td></tr>
           <tr>
             <th>Estado</th>
             <td>
               {% if product.is_active %}
-                <span class="badge bg-success">Activo</span>
+                <span class="badge badge-success">Activo</span>
               {% else %}
-                <span class="badge bg-danger">Inactivo</span>
+                <span class="badge badge-error">Inactivo</span>
               {% endif %}
             </td>
           </tr>
@@ -74,10 +55,24 @@
       </div>
     </div>
 
+    {% if product.barcode %}
     <hr>
-    <a href="{% url 'billing:product_list' %}" class="btn btn-secondary">Volver al listado</a>
-    <a href="{% url 'billing:product_update' product.pk %}" class="btn btn-warning">Editar</a>
-    <a href="{% url 'billing:product_delete' product.pk %}" class="btn btn-danger">Borrar</a>
+    <div class="d-flex align-items-center gap-3">
+      <img src="{% url 'billing:product_barcode_image' product.pk %}" alt="Código de barras" class="h-70">
+      <a href="{% url 'billing:product_barcode_print' product.pk %}" class="btn btn-secondary"><i data-lucide="printer"></i>Imprimir código de barras</a>
+    </div>
+    {% endif %}
+
+    <hr>
+    <div class="d-flex gap-2">
+      <a href="{% url 'billing:product_list' %}" class="btn btn-secondary">Volver al listado</a>
+      {% if perms.billing.change_product %}
+        <a href="{% url 'billing:product_update' product.pk %}" class="btn btn-warning"><i data-lucide="pencil"></i>Editar</a>
+      {% endif %}
+      {% if perms.billing.delete_product %}
+        <a href="{% url 'billing:product_delete' product.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Borrar</a>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

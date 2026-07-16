@@ -1,0 +1,13 @@
+<div class="list-toolbar">
+  <form method="get" class="d-flex flex-wrap align-items-center gap-2 w-full">
+    <label class="text-small text-muted mb-0">Desde</label>
+    <input type="date" name="desde" value="{{ desde|date:'Y-m-d' }}" class="form-control max-w-170">
+    <label class="text-small text-muted mb-0">Hasta</label>
+    <input type="date" name="hasta" value="{{ hasta|date:'Y-m-d' }}" class="form-control max-w-170">
+    <button type="submit" class="btn btn-primary">Aplicar</button>
+    <div class="ms-auto d-flex gap-2">
+      <a href="?desde={{ desde|date:'Y-m-d' }}&hasta={{ hasta|date:'Y-m-d' }}&export=pdf" class="btn btn-outline-danger btn-sm"><i data-lucide="file-text"></i>PDF</a>
+      <a href="?desde={{ desde|date:'Y-m-d' }}&hasta={{ hasta|date:'Y-m-d' }}&export=excel" class="btn btn-outline-secondary btn-sm"><i data-lucide="file-spreadsheet"></i>Excel</a>
+    </div>
+  </form>
+</div>

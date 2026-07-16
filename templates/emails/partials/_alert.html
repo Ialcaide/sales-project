@@ -1,0 +1,24 @@
+{% comment %}
+Caja de alerta discreta (mismos 4 tonos que .badge-* del sitio: success/
+warning/error/info). Uso:
+  {% include "emails/partials/_alert.html" with tipo="success" texto="Todo listo." %}
+tipo: "success" | "warning" | "error" | "info" (default).
+{% endcomment %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 18px 0;">
+  <tr>
+    <td style="background-color:{% if tipo == 'success' %}#D1FAE5{% elif tipo == 'warning' %}#FEF3C7{% elif tipo == 'error' %}#FEE2E2{% else %}#E0F2FE{% endif %};
+                border-radius:12px; padding:16px 18px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td valign="top" style="font-size:15px; padding-right:10px; line-height:1.6;">
+            {% if tipo == 'success' %}&#9989;{% elif tipo == 'warning' %}&#9888;&#65039;{% elif tipo == 'error' %}&#10060;{% else %}&#8505;&#65039;{% endif %}
+          </td>
+          <td style="font-size:14px; line-height:1.6; font-weight:500;
+                     color:{% if tipo == 'success' %}#047857{% elif tipo == 'warning' %}#B45309{% elif tipo == 'error' %}#B91C1C{% else %}#0369A1{% endif %};">
+            {{ texto|safe }}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

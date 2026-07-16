@@ -1,0 +1,108 @@
+{% extends 'billing/base.html' %}
+{% block title %}Panel Cajero{% endblock %}
+{% block breadcrumbs %}<span class="current">Panel Cajero</span>{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <h2 class="icon-text"><i data-lucide="house" class="icon-lg icon-primary"></i>Bienvenido, {{ user.username }}</h2>
+  <p class="text-muted mb-0">Panel de Caja — abre tu caja para empezar a vender.</p>
+</div>
+
+{% if sesion_caja_abierta %}
+<div class="card mb-4">
+  <div class="card-header card-header-success">
+    <span class="icon-text"><i data-lucide="store" class="icon-sm"></i>Caja abierta</span>
+    <span class="badge badge-success">#{{ sesion_caja_abierta.id }}</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 text-center mb-3">
+      <div class="col-md-3">
+        <div class="text-muted small">Monto Inicial</div>
+        <div class="fs-5 fw-bold">${{ sesion_caja_abierta.monto_inicial }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="text-muted small">Ingresos</div>
+        <div class="fs-5 fw-bold text-success">${{ sesion_caja_abierta.total_ingresos }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="text-muted small">Egresos</div>
+        <div class="fs-5 fw-bold text-danger">${{ sesion_caja_abierta.total_egresos }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="text-muted small">Monto Esperado</div>
+        <div class="fs-5 fw-bold">${{ sesion_caja_abierta.monto_esperado_cierre }}</div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'caja:caja_detalle' sesion_caja_abierta.pk %}" class="btn btn-secondary"><i data-lucide="eye"></i>Ver Caja</a>
+      <a href="{% url 'caja:movimiento_crear' sesion_caja_abierta.pk %}" class="btn btn-secondary"><i data-lucide="circle-plus"></i>Nuevo Movimiento</a>
+      <a href="{% url 'caja:caja_cerrar' sesion_caja_abierta.pk %}" class="btn btn-outline-danger"><i data-lucide="lock"></i>Cerrar Caja</a>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><span class="icon-text"><i data-lucide="history" class="icon-sm"></i>Movimientos de esta sesión</span></div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>Tipo</th><th>Concepto</th><th class="text-end">Monto</th><th>Hora</th></tr></thead>
+      <tbody>
+        {% for mov in sesion_caja_abierta.movimientos.all|slice:":8" %}
+        <tr>
+          <td><span class="badge {% if mov.tipo == 'ingreso' %}badge-success{% else %}badge-error{% endif %}">{{ mov.get_tipo_display }}</span></td>
+          <td>{{ mov.concepto }}</td>
+          <td class="text-end fw-bold">${{ mov.monto }}</td>
+          <td>{{ mov.fecha|date:"H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="4">Sin movimientos todavía</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="card mb-4">
+  <div class="card-body card-body-spacious">
+    <i data-lucide="store" class="icon-2xl icon-warning"></i>
+    <h4 class="mt-3">No tienes una caja abierta</h4>
+    <p class="text-muted">Necesitas abrir tu caja antes de poder registrar ventas en efectivo.</p>
+    <a href="{% url 'caja:caja_abrir' %}" class="btn btn-primary"><i data-lucide="unlock"></i>Abrir Caja</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="mb-3 icon-text"><i data-lucide="zap" class="icon-md icon-warning"></i>Acciones rápidas</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'billing:invoice_create' %}" class="btn btn-warning"><i data-lucide="circle-plus"></i>Nueva Venta</a>
+      <a href="{% url 'caja:caja_historial' %}" class="btn btn-secondary"><i data-lucide="history"></i>Historial de Caja</a>
+      <a href="{% url 'devoluciones:devolucion_list' %}" class="btn btn-secondary"><i data-lucide="corner-down-left"></i>Devoluciones</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="icon-text"><i data-lucide="receipt" class="icon-sm"></i>Facturas Recientes</span></div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>#</th><th>Cliente</th><th>Fecha</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for inv in recent_invoices %}
+        <tr>
+          <td>{{ inv.id }}</td>
+          <td>{{ inv.customer }}</td>
+          <td>{{ inv.invoice_date|date:"d/m/Y" }}</td>
+          <td class="text-end fw-bold">${{ inv.total }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="4">Sin facturas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

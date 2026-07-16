@@ -1,0 +1,229 @@
+/* ==========================================================================
+   FORMULARIOS
+   Campos amplios (44px), etiqueta arriba, placeholder discreto, borde azul
+   al foco. Incluye variantes de input con ícono, la casilla "activo" con
+   descripción (.active-box) y la casilla de permisos de Seguridad.
+   ========================================================================== */
+
+.form-label, label.form-label, .field-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+}
+
+.form-control, .form-select, textarea.form-control,
+input[type="text"].form-control, input[type="date"].form-control {
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-input);
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+textarea.form-control { height: auto; min-height: 120px; padding-top: 12px; padding-bottom: 12px; }
+.form-control::placeholder { color: var(--color-text-secondary); opacity: .8; }
+.form-control:hover, .form-select:hover { border-color: var(--color-text-secondary); }
+.form-control:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-light);
+}
+.form-control[readonly], .form-control:disabled {
+  background-color: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+.form-control.form-control-sm, .form-select.form-control-sm { height: 36px; padding: 0 12px; font-size: var(--font-size-sm); border-radius: var(--radius-sm); }
+select.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+
+.form-check { display: flex; align-items: center; gap: 8px; }
+.form-check-input {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--color-border);
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+.form-check-input:focus { outline: none; box-shadow: 0 0 0 3px var(--color-primary-light); }
+.form-check-label { font-size: var(--font-size-base); color: var(--color-text-primary); cursor: pointer; }
+
+/* ---------- Grupo de opciones tipo "chip" (ej. tipo de cliente en el paso 1
+   del wizard de factura — Consumidor Final / Cliente con RUC / Cliente
+   registrado) — un <input type="radio"> normal, solo re-estilizado como
+   chip seleccionable en vez del círculo nativo. ---------- */
+.choice-group { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.choice-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px var(--space-2);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
+}
+.choice-option input[type="radio"] { accent-color: var(--color-primary); cursor: pointer; }
+.choice-option:hover { border-color: var(--color-text-secondary); }
+.choice-option.is-checked { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary); }
+
+/* ---------- Input con ícono ---------- */
+
+.input-with-icon { position: relative; }
+.input-with-icon svg, .input-with-icon .icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--color-text-secondary); width: var(--icon-sm); height: var(--icon-sm); pointer-events: none; z-index: 1;
+}
+.input-with-icon .form-control, .input-with-icon .form-select { padding-left: 42px; }
+
+.input-icon-top { position: relative; }
+.input-icon-top svg, .input-icon-top .icon {
+  position: absolute; left: 14px; top: 14px; color: var(--color-text-secondary); width: var(--icon-sm); height: var(--icon-sm); pointer-events: none; z-index: 1;
+}
+.input-icon-top textarea.form-control { padding-left: 42px; min-height: 130px; }
+
+.form-text { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 6px; }
+.invalid-feedback, .text-danger.small { color: var(--color-error); font-size: var(--font-size-xs); margin-top: 4px; }
+.form-control.is-invalid, .form-select.is-invalid { border-color: var(--color-error); }
+
+/* ---------- Caja con scroll (lista larga de checkboxes, ej. permisos de un rol) ---------- */
+
+.scroll-box {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  padding: 12px;
+}
+
+/* ---------- Panel de datos de referencia (cliente/proveedor autocompletado) ---------- */
+
+.info-panel {
+  background: var(--color-bg);
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  padding: var(--space-2);
+}
+
+/* ---------- Casilla "activo" con descripción ---------- */
+
+.active-box {
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-input);
+  padding: var(--space-2) var(--space-3);
+  display: flex; align-items: flex-start; gap: var(--space-2);
+}
+.active-box-text strong { display: block; font-size: var(--font-size-md); color: var(--color-primary-soft-text); }
+.active-box-text span { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+
+/* ---------- Casilla de permisos (Seguridad > Permisos) ---------- */
+
+.perm-check {
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  transition: background-color var(--transition-fast);
+}
+.perm-check:hover { background-color: var(--color-bg); }
+
+/* ---------- Wizard de pasos (ej. crear factura — Cliente/Detalles/Facturación) ---------- */
+
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+.wizard-step-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.wizard-step-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+.wizard-step-label { font-weight: var(--font-weight-medium); font-size: var(--font-size-sm); white-space: nowrap; }
+.wizard-step-connector {
+  flex: 1 1 auto;
+  height: 2px;
+  background: var(--color-border);
+  transition: background-color var(--transition-fast);
+}
+.wizard-step-connector.is-done { background: var(--color-primary); }
+.wizard-step-item.is-active .wizard-step-circle { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.wizard-step-item.is-active .wizard-step-label { color: var(--color-text-primary); }
+.wizard-step-item.is-done .wizard-step-circle { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); }
+.wizard-step-footer { margin-top: var(--space-3); }
+
+/* ---------- Tarjetas de opción grandes (ej. Consumidor Final / Cliente con
+   datos en el paso 1 del wizard de factura) — un <input type="radio">
+   normal, re-estilizado como tarjeta con ícono en vez del círculo nativo.
+   Para opciones secundarias más chicas (ej. filtro por tipo de
+   identificación) usar .choice-group/.choice-option de arriba en su
+   lugar. ---------- */
+.option-cards { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.option-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 240px;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.option-card input[type="radio"] { accent-color: var(--color-primary); cursor: pointer; }
+.option-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.option-card-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.option-card-text { display: flex; flex-direction: column; gap: 2px; }
+.option-card-text strong { font-size: var(--font-size-md); color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+.option-card-text small { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.option-card:hover { border-color: var(--color-text-secondary); }
+.option-card.is-checked { border-color: var(--color-primary); background: var(--color-primary-light); box-shadow: 0 0 0 1px var(--color-primary); }
+.option-card.is-checked .option-card-icon { background: var(--color-primary); color: #fff; }
+.option-card.is-checked .option-card-text strong { color: var(--color-primary); }

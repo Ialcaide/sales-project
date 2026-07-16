@@ -20,6 +20,31 @@ class UserProfile(models.Model):
     class Meta:
         verbose_name = 'Perfil de Usuario'
         verbose_name_plural = 'Perfiles de Usuario'
+        # Botón "Enviar Acceso por WhatsApp" en la lista/detalle de usuarios —
+        # abre un link wa.me con el acceso ya redactado, no envía nada
+        # automático (ver whatsapp_acceso_url más abajo).
+        permissions = [('send_whatsapp_userprofile', 'Puede enviar acceso al sistema por WhatsApp')]
 
     def __str__(self):
         return f'Perfil: {self.user.username}'
+
+    @property
+    def whatsapp_acceso_url(self):
+        """
+        Link "wa.me" con un mensaje ya redactado recordándole al usuario cómo
+        acceder al sistema (URL + su usuario) — al tocarlo se abre WhatsApp
+        con el chat de ese usuario y el mensaje listo para enviar (se
+        presiona "Enviar" a mano, no se manda nada automático). None si no
+        tiene teléfono registrado.
+        """
+        if not self.phone:
+            return None
+        from urllib.parse import quote
+        from django.conf import settings
+        mensaje = (
+            f'Hola {self.user.first_name}, este es tu acceso al sistema de TecnoStock S.A.:\n'
+            f'{settings.SITE_URL}\n'
+            f'Tu usuario es: {self.user.username}\n'
+            f'Si no recuerdas tu contraseña, usa la opción "Recuperar credenciales" en la pantalla de inicio de sesión.'
+        )
+        return f'https://wa.me/{self.phone.lstrip("+")}?text={quote(mensaje)}'

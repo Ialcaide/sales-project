@@ -1,0 +1,196 @@
+{% extends 'billing/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header card-header-accent">{{ title }}</div>
+      <div class="card-body">
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <p class="mb-1"><strong>Factura:</strong> #{{ factura.id|stringformat:"04d" }}</p>
+            <p class="mb-1"><strong>Cliente:</strong> {{ factura.customer }}</p>
+            {% if factura.meses_credito %}
+            <p class="mb-1"><strong>Total:</strong> ${{ factura.total }} + interés ${{ factura.interes }} (crédito a {{ factura.meses_credito }} mes{{ factura.meses_credito|pluralize:"es" }})</p>
+            <p class="mb-1"><strong>Saldo Pendiente:</strong> <span class="fw-bold text-danger">${{ factura.saldo }}</span></p>
+            <p class="mb-0"><strong>Cuota Mínima Mensual:</strong> <span class="fw-bold text-primary">${{ factura.cuota_minima }}</span></p>
+            {% else %}
+            <p class="mb-1"><strong>Total:</strong> ${{ factura.total }}</p>
+            <p class="mb-0"><strong>Saldo Pendiente:</strong> <span class="fw-bold text-danger">${{ factura.saldo }}</span></p>
+            {% endif %}
+          </div>
+        </div>
+        {% if factura.meses_credito %}
+        <div class="alert alert-info small">
+          El cobro debe ser de al menos la cuota mínima (${{ factura.cuota_minima }}) para terminar de cancelar
+          esta factura dentro de los {{ factura.meses_credito }} meses acordados — salvo que sea el último abono,
+          que puede ser exactamente el saldo restante.
+        </div>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <form method="post" id="cobro-form">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label">Fecha de Cobro</label>
+            {{ form.fecha }}
+            {% if cobro %}
+              <div class="form-text">La fecha queda fija a cuando se registró el cobro; solo se puede corregir el valor y la observación.</div>
+            {% else %}
+              <div class="form-text">
+                {% if factura.meses_credito %}
+                Debe estar entre {{ factura.invoice_date|date:"d/m/Y" }} (fecha de la factura) y
+                {{ factura.fecha_limite_pago|date:"d/m/Y" }} (plazo de crédito).
+                {% else %}
+                No puede ser anterior a {{ factura.invoice_date|date:"d/m/Y" }} (fecha de la factura).
+                {% endif %}
+              </div>
+            {% endif %}
+            {% for error in form.fecha.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Valor a Abonar</label>
+            {{ form.valor }}
+            {% for error in form.valor.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3 {% if not form.monto_recibido.errors %}d-none-force{% endif %}" id="monto-recibido-wrapper">
+            <label class="form-label">Monto recibido del cliente</label>
+            {{ form.monto_recibido }}
+            <div class="form-text">Se pide al tocar "Registrar Cobro en Efectivo".</div>
+            {% for error in form.monto_recibido.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Observación</label>
+            {{ form.observacion }}
+            {% for error in form.observacion.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'cobros:invoice_pending_list' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary"><i data-lucide="coins"></i>Registrar Cobro en Efectivo</button>
+          </div>
+        </form>
+
+        {% if not cobro and paypal_configurado %}
+        <hr class="my-4">
+        <p class="text-muted small mb-2">O que el cliente pague directamente con PayPal (única forma real de cobrar por PayPal):</p>
+        <form method="post" action="{% url 'cobros:cobro_paypal_iniciar' factura.id %}" class="d-flex gap-2">
+          {% csrf_token %}
+          <input type="number" name="monto" class="form-control" step="0.01" min="0.01" max="{{ factura.saldo }}"
+                 value="{{ factura.saldo }}" placeholder="Monto a pagar">
+          <button type="submit" class="btn btn-secondary text-nowrap text-paypal">
+            {% include 'partials/icon_paypal.html' %}Pagar con PayPal
+          </button>
+        </form>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cartel de pago en efectivo: se muestra recién al tocar "Guardar Cobro"
+     cuando la forma de pago es efectivo — mismo patrón que invoice_form.html
+     (billing). Acá se pregunta cuánto entregó el cliente y se calcula el
+     cambio (o cuánto falta, si da de menos) contra el valor del abono. -->
+<div class="modal fade" id="montoRecibidoModalCobro" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="coins" class="icon-md icon-success"></i>Pago en Efectivo</h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Valor a abonar: <span id="modal-total-cobro" class="fw-bold">$0.00</span></p>
+        <label class="form-label">¿Cuánto dinero te entregó el cliente?</label>
+        <input type="number" id="modal-monto-input-cobro" class="form-control" step="0.01" min="0" placeholder="Ej: 50.00" autofocus>
+        <div id="modal-feedback-cobro" class="mt-2 small"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-cancelar-cobro">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="modal-confirmar-cobro">Confirmar y Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Este formulario ahora es exclusivamente para EFECTIVO (pagar con PayPal
+// usa el botón real de arriba) — salvo que se esté editando un cobro que
+// ya se pagó por PayPal (cobro.forma_pago == 'paypal'), caso en el que no
+// corresponde pedir monto recibido/cambio.
+const esCobroEfectivo = {% if not cobro or cobro.forma_pago == 'efectivo' %}true{% else %}false{% endif %};
+const montoRecibidoInputCobro = document.getElementById('id_monto_recibido');
+const valorInputCobro = document.getElementById('id_valor');
+const cobroForm = document.getElementById('cobro-form');
+const montoModalCobroEl = document.getElementById('montoRecibidoModalCobro');
+const montoModalCobro = new bootstrap.Modal(montoModalCobroEl);
+const modalTotalCobro = document.getElementById('modal-total-cobro');
+const modalMontoInputCobro = document.getElementById('modal-monto-input-cobro');
+const modalFeedbackCobro = document.getElementById('modal-feedback-cobro');
+let montoConfirmadoCobro = false;
+
+valorInputCobro.addEventListener('input', function() { montoConfirmadoCobro = false; });
+
+function actualizarFeedbackModalCobro() {
+  const valor = parseFloat(valorInputCobro.value) || 0;
+  const monto = parseFloat(modalMontoInputCobro.value) || 0;
+  if (monto <= 0) {
+    modalFeedbackCobro.textContent = '';
+    modalFeedbackCobro.className = 'mt-2 small';
+  } else if (monto < valor) {
+    modalFeedbackCobro.textContent = 'Aún falta $' + (valor - monto).toFixed(2) + ' por completar.';
+    modalFeedbackCobro.className = 'mt-2 small text-danger fw-bold';
+  } else {
+    modalFeedbackCobro.textContent = 'Cambio a devolver: $' + (monto - valor).toFixed(2);
+    modalFeedbackCobro.className = 'mt-2 small text-success fw-bold';
+  }
+}
+modalMontoInputCobro.addEventListener('input', actualizarFeedbackModalCobro);
+
+document.getElementById('modal-confirmar-cobro').addEventListener('click', function() {
+  const valor = parseFloat(valorInputCobro.value) || 0;
+  const monto = parseFloat(modalMontoInputCobro.value) || 0;
+  if (monto < valor) {
+    actualizarFeedbackModalCobro();
+    modalMontoInputCobro.focus();
+    return;
+  }
+  montoRecibidoInputCobro.value = monto.toFixed(2);
+  montoConfirmadoCobro = true;
+  montoModalCobro.hide();
+  cobroForm.submit();
+});
+
+document.getElementById('modal-cancelar-cobro').addEventListener('click', function() {
+  montoModalCobro.hide();
+});
+
+cobroForm.addEventListener('submit', function(e) {
+  if (esCobroEfectivo && !montoConfirmadoCobro) {
+    e.preventDefault();
+    modalTotalCobro.textContent = '$' + (parseFloat(valorInputCobro.value) || 0).toFixed(2);
+    modalMontoInputCobro.value = montoRecibidoInputCobro.value || '';
+    actualizarFeedbackModalCobro();
+    montoModalCobro.show();
+  }
+});
+</script>
+
+{% endblock %}

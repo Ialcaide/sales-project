@@ -59,13 +59,20 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'billing',
     'purchasing',
     'security',
     'home',
-
-    'django_extensions',  # habilita "manage.py shell_plus"
+    'django_extensions',
+    'pagos',
+    'cobros',
+    'caja',
+    'devoluciones',
+    'notificaciones',
+    'reportes',
+    'configuracion',
+    'paypal_pagos',
+    'facturacion_electronica',
 ]
 
 # =====================================================
@@ -108,6 +115,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
+                'notificaciones.context_processors.notificaciones',
             ],
         },
     },
@@ -169,7 +177,14 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # =====================================================
 # ARCHIVOS MULTIMEDIA
@@ -211,6 +226,45 @@ DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_WHATSAPP_FROM = os.environ.get('TWILIO_WHATSAPP_FROM', '')
+
+# =====================================================
+# PAYPAL
+# =====================================================
+# Client ID/Secret de una app en developer.paypal.com (Sandbox para pruebas,
+# Live para producción). PAYPAL_WEBHOOK_ID se obtiene al registrar el webhook
+# en el dashboard de PayPal (apunta a /paypal/webhook/) y se usa para
+# verificar que las notificaciones realmente vienen de PayPal.
+
+PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID', '')
+PAYPAL_CLIENT_SECRET = os.environ.get('PAYPAL_CLIENT_SECRET', '')
+PAYPAL_WEBHOOK_ID = os.environ.get('PAYPAL_WEBHOOK_ID', '')
+PAYPAL_MODE = os.environ.get('PAYPAL_MODE', 'sandbox')  # 'sandbox' o 'live'
+
+# =====================================================
+# SRI - Facturación Electrónica (Ecuador)
+# =====================================================
+# La firma/envío al SRI ya NO vive en este proyecto — se movió a
+# sri_facturacion_service/ (un proyecto Django aparte, con su propia base de
+# datos, pensado para poder reutilizarse desde cualquier otro proyecto, no
+# solo este). Acá solo queda el lado CLIENTE: la URL de ese servicio + la
+# API key para autenticarse contra él (ver facturacion_electronica/services.py).
+# El certificado .p12 y SRI_AMBIENTE ahora se configuran en el .env DE ESE
+# SERVICIO, no acá.
+FACTURACION_ELECTRONICA_SERVICE_URL = os.environ.get(
+    'FACTURACION_ELECTRONICA_SERVICE_URL', 'http://localhost:8001'
+)
+FACTURACION_ELECTRONICA_SERVICE_API_KEY = os.environ.get('FACTURACION_ELECTRONICA_SERVICE_API_KEY', '')
+FACTURACION_ELECTRONICA_SERVICE_TIMEOUT = float(os.environ.get('FACTURACION_ELECTRONICA_SERVICE_TIMEOUT', '10'))
+
+# API key para el endpoint de verificación de facturas ante el SRI (ver
+# facturacion_electronica/views.py -> verificar_autorizacion_api), usada
+# por clientes EXTERNOS que llaman esa API sin sesión Django (header
+# X-API-Key). Vacío por defecto = ese acceso queda deshabilitado hasta
+# configurarlo — el uso interno (sesión + permiso) no depende de esto. Es un
+# secreto DISTINTO del de arriba: este lo usan clientes externos para
+# preguntarle A ESTE proyecto por una factura; el de arriba lo usa este
+# proyecto para hablarle AL microservicio.
+SRI_VERIFICACION_API_KEY = os.environ.get('SRI_VERIFICACION_API_KEY', '')
 
 # =====================================================
 # MESSAGES

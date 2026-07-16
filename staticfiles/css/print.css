@@ -1,0 +1,9 @@
+/* Reglas de impresión — hoy solo la etiqueta de código de barras del producto. */
+.barcode-label { max-width: 380px; padding: var(--space-3); }
+
+@media print {
+  .sidebar, .header, .drawer-backdrop, .no-print { display: none !important; }
+  .main-column { margin-left: 0 !important; }
+  .main-content { padding: 0 !important; max-width: none !important; }
+  .barcode-label { box-shadow: none !important; border: 1px dashed #999 !important; }
+}

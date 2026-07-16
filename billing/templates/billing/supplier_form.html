@@ -5,9 +5,7 @@
 
 <div class="form-wrapper">
   <div class="form-header">
-    <div class="form-header-icon">
-      <i class="bi bi-truck"></i>
-    </div>
+    <div class="form-header-icon"><i data-lucide="truck"></i></div>
     <div class="form-header-text">
       <h4>Proveedor</h4>
       <p>Registra la información del proveedor</p>
@@ -20,10 +18,8 @@
       <div class="col-md-6">
         <label class="field-label">Nombre de la empresa</label>
         <div class="input-with-icon">
-          <i class="bi bi-building icon"></i>
-          <input type="text" name="name" value="{{ form.name.value|default:'' }}"
-            class="form-control"
-            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+          <i data-lucide="building-2"></i>
+          <input type="text" name="name" value="{{ form.name.value|default:'' }}" class="form-control">
         </div>
         {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
       </div>
@@ -31,10 +27,8 @@
       <div class="col-md-6">
         <label class="field-label">Persona de contacto</label>
         <div class="input-with-icon">
-          <i class="bi bi-person icon"></i>
-          <input type="text" name="contact_name" value="{{ form.contact_name.value|default:'' }}"
-            class="form-control"
-            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+          <i data-lucide="user"></i>
+          <input type="text" name="contact_name" value="{{ form.contact_name.value|default:'' }}" class="form-control">
         </div>
         {% if form.contact_name.errors %}<div class="text-danger small mt-1">{{ form.contact_name.errors|join:", " }}</div>{% endif %}
       </div>
@@ -42,10 +36,8 @@
       <div class="col-md-6">
         <label class="field-label">Correo electrónico</label>
         <div class="input-with-icon">
-          <i class="bi bi-envelope icon"></i>
-          <input type="email" name="email" value="{{ form.email.value|default:'' }}"
-            class="form-control"
-            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+          <i data-lucide="mail"></i>
+          <input type="email" name="email" value="{{ form.email.value|default:'' }}" class="form-control">
         </div>
         {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors|join:", " }}</div>{% endif %}
       </div>
@@ -53,10 +45,8 @@
       <div class="col-md-6">
         <label class="field-label">Teléfono</label>
         <div class="input-with-icon">
-          <i class="bi bi-telephone icon"></i>
-          <input type="text" name="phone" value="{{ form.phone.value|default:'' }}"
-            class="form-control"
-            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%;">
+          <i data-lucide="phone"></i>
+          <input type="text" name="phone" value="{{ form.phone.value|default:'' }}" class="form-control">
         </div>
         {% if form.phone.errors %}<div class="text-danger small mt-1">{{ form.phone.errors|join:", " }}</div>{% endif %}
       </div>
@@ -64,18 +54,15 @@
       <div class="col-12">
         <label class="field-label">Dirección</label>
         <div class="input-icon-top">
-          <i class="bi bi-geo-alt icon"></i>
-          <textarea name="address" class="form-control"
-            style="border:1.5px solid #c7d2fe; border-radius:12px; padding:11px 16px 11px 44px; background:#f9fafb; width:100%; min-height:130px; resize:vertical;">{{ form.address.value|default:'' }}</textarea>
+          <i data-lucide="map-pin"></i>
+          <textarea name="address" class="form-control">{{ form.address.value|default:'' }}</textarea>
         </div>
         {% if form.address.errors %}<div class="text-danger small mt-1">{{ form.address.errors|join:", " }}</div>{% endif %}
       </div>
 
       <div class="col-12">
         <div class="active-box">
-          <input type="checkbox" name="is_active" class="form-check-input"
-            {% if form.is_active.value %}checked{% endif %}
-            style="width:22px; height:22px; border-radius:6px; cursor:pointer; flex-shrink:0;">
+          <input type="checkbox" name="is_active" class="form-check-input" {% if form.is_active.value %}checked{% endif %}>
           <div class="active-box-text">
             <strong>Proveedor Activo</strong>
             <span>Marque esta opción si el proveedor está activo y disponible para operaciones.</span>
@@ -86,14 +73,10 @@
 
     <div class="row g-3 mt-4">
       <div class="col-md-6">
-        <button type="submit" class="btn btn-guardar w-100">
-          <i class="bi bi-floppy me-2"></i>Guardar
-        </button>
+        <button type="submit" class="btn btn-guardar w-100"><i data-lucide="save"></i>Guardar</button>
       </div>
       <div class="col-md-6">
-        <a href="{% url 'billing:supplier_list' %}" class="btn btn-cancelar w-100 text-center">
-          <i class="bi bi-x-circle me-2"></i>Cancelar
-        </a>
+        <a href="{% url 'billing:supplier_list' %}" class="btn btn-cancelar w-100 text-center"><i data-lucide="circle-x"></i>Cancelar</a>
       </div>
     </div>
   </form>

@@ -1,101 +1,123 @@
 {% extends 'billing/base.html' %}
 {% load security_tags %}
 {% block title %}Facturas{% endblock %}
+{% block breadcrumbs %}<span class="current">Facturas</span>{% endblock %}
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0">Facturas</h2>
-  <div class="d-flex gap-2">
-    <a href="{% url 'billing:invoice_create' %}" class="btn btn-primary">+ Nueva factura</a>
-    <button type="submit" form="filtros-form" name="export" value="pdf" class="btn btn-danger">PDF</button>
-    <button type="submit" form="filtros-form" name="export" value="excel" class="btn btn-success">Excel</button>
+<div class="list-header">
+  <h2>Facturas</h2>
+  <div class="list-header-actions">
+    {% if perms.billing.export_pdf_invoice %}
+      <button type="submit" form="filtros-form" name="export" value="pdf" class="btn btn-outline-danger btn-sm"><i data-lucide="file-text"></i>PDF</button>
+    {% endif %}
+    {% if perms.billing.export_excel_invoice %}
+      <button type="submit" form="filtros-form" name="export" value="excel" class="btn btn-outline-secondary btn-sm"><i data-lucide="file-spreadsheet"></i>Excel</button>
+    {% endif %}
+    <a href="{% url 'billing:invoice_create' %}" class="btn btn-primary"><i data-lucide="circle-plus"></i>Nueva factura</a>
   </div>
 </div>
 
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <form method="get" id="filtros-form">
-      <div class="d-flex align-items-center gap-2">
-        <div class="input-group" style="max-width:350px;">
-          <span class="input-group-text bg-white border-end-0">🔍</span>
-          <input type="text" name="q" value="{{ query }}" class="form-control border-start-0" placeholder="Nombre o cédula del cliente...">
-        </div>
-        <div class="dropdown">
-          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            Filtros
-          </button>
-          <div class="dropdown-menu p-3" style="min-width:400px;" onclick="event.stopPropagation()">
-            <div class="row g-2">
-              <div class="col-md-6">
-                <label class="form-label small text-muted mb-1">Fecha desde</label>
-                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label small text-muted mb-1">Fecha hasta</label>
-                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label small text-muted mb-1">Total mínimo</label>
-                <input type="number" step="0.01" name="min_total" value="{{ min_total }}" class="form-control form-control-sm">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label small text-muted mb-1">Total máximo</label>
-                <input type="number" step="0.01" name="max_total" value="{{ max_total }}" class="form-control form-control-sm">
-              </div>
-              <div class="col-12 d-flex justify-content-end gap-2 mt-2">
-                <a href="{% url 'billing:invoice_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-                <button type="submit" class="btn btn-sm btn-primary">Aplicar</button>
-              </div>
-            </div>
+<div class="list-toolbar">
+  <form method="get" id="filtros-form" class="d-flex align-items-center gap-2 flex-wrap w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Nombre o cédula del cliente...">
+    </div>
+    <div class="dropdown">
+      <button class="btn btn-secondary" type="button" data-bs-toggle="dropdown">
+        <i data-lucide="sliders-horizontal"></i>Filtros
+      </button>
+      <div class="dropdown-menu dropdown-menu-lg p-3" onclick="event.stopPropagation()">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Fecha desde</label>
+            <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Fecha hasta</label>
+            <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Total mínimo</label>
+            <input type="number" step="0.01" name="min_total" value="{{ min_total }}" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Total máximo</label>
+            <input type="number" step="0.01" name="max_total" value="{{ max_total }}" class="form-control form-control-sm">
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2 mt-2">
+            <a href="{% url 'billing:invoice_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+            <button type="submit" class="btn btn-sm btn-primary">Aplicar</button>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">Buscar</button>
-        {% if query or date_from or date_to or min_total or max_total %}
-          <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline-secondary">✕ Limpiar</a>
-        {% endif %}
       </div>
-    </form>
-  </div>
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query or date_from or date_to or min_total or max_total %}
+      <a href="{% url 'billing:invoice_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
 </div>
 
-<table class="table table-striped table-hover">
-  <thead class="table-dark">
-    <tr>
-      <th>#</th>
-      <th>N° Factura</th>
-      <th>Cliente</th>
-      <th>Fecha</th>
-      <th class="text-end">Subtotal</th>
-      <th class="text-end">IVA</th>
-      <th class="text-end">Total</th>
-      <th>Acciones</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for inv in page_obj %}
-    <tr>
-      <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
-      <td>#{{ inv.id|stringformat:"04d" }}</td>
-      <td>{{ inv.customer }}</td>
-      <td>{{ inv.invoice_date|date:"d/m/Y H:i" }}</td>
-      <td class="text-end">${{ inv.subtotal }}</td>
-      <td class="text-end">${{ inv.tax }}</td>
-      <td class="text-end fw-bold">${{ inv.total }}</td>
-      <td>
-        <a href="{% url 'billing:invoice_detail' inv.pk %}" class="btn btn-sm btn-info">Ver</a>
-        <a href="{% url 'billing:invoice_pdf' inv.pk %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF" target="_blank">
-          <i class="bi bi-printer"></i>
-        </a>
-        {% if user|has_group:'Administrador' or user.is_superuser %}
-          <a href="{% url 'billing:invoice_delete' inv.pk %}" class="btn btn-sm btn-danger">Borrar</a>
-        {% endif %}
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="8" class="text-center">No hay facturas registradas</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th>#</th><th>N° Factura</th><th>Cliente</th><th>Fecha</th><th class="text-end">Subtotal</th>
+          <th class="text-end">IVA</th><th class="text-end">Total</th><th>Tipo de Pago</th><th class="text-end">Saldo</th>
+          <th>Estado</th><th></th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in page_obj %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ inv.id|stringformat:"04d" }}</td>
+          <td>{{ inv.customer }}</td>
+          <td>{{ inv.invoice_date|date:"d/m/Y H:i" }}</td>
+          <td class="text-end">${{ inv.subtotal }}</td>
+          <td class="text-end">${{ inv.tax }}</td>
+          <td class="text-end fw-bold">${{ inv.total }}</td>
+          <td>{{ inv.get_tipo_pago_display }}</td>
+          <td class="text-end">${{ inv.saldo }}</td>
+          <td>
+            {% if inv.estado == 'pagada' %}
+              <span class="badge badge-success">Pagada</span>
+            {% else %}
+              <span class="badge badge-warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not inv.is_active %}
+              <span class="badge badge-neutral">Anulada</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              {% if perms.billing.view_invoice %}
+                <a href="{% url 'billing:invoice_detail' inv.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+                <a href="{% url 'billing:invoice_pdf' inv.pk %}" class="row-action-btn" title="Descargar PDF" target="_blank"><i data-lucide="printer"></i></a>
+              {% endif %}
+              {% if inv.is_active and perms.billing.change_invoice %}
+                <a href="{% url 'billing:invoice_cancel' inv.pk %}" class="row-action-btn" title="Anular"><i data-lucide="ban"></i></a>
+              {% endif %}
+              {% if perms.billing.delete_invoice %}
+                <button type="button" class="row-action-btn danger" title="Eliminar" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                        data-delete-url="{% url 'billing:invoice_delete' inv.pk %}" data-delete-label="la factura #{{ inv.id|stringformat:'04d' }}">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="12">No hay facturas registradas</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
 {% include 'partials/pagination.html' %}
 

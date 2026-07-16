@@ -1,0 +1,85 @@
+{% extends 'billing/base.html' %}
+{% block title %}Reporte de Inventario{% endblock %}
+{% block breadcrumbs %}<a href="{% url 'reportes:reporte_index' %}">Reportes</a> / <span class="current">Inventario</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Reporte de Inventario</h2>
+  <a href="{% url 'reportes:reporte_index' %}" class="btn btn-secondary">Volver</a>
+</div>
+
+<div class="list-toolbar d-flex justify-content-between align-items-center">
+  <span class="fw-bold">Valor total de inventario: <span class="text-success">${{ valor_total|floatformat:2 }}</span></span>
+  <div class="d-flex gap-2">
+    <a href="?export=pdf" class="btn btn-outline-danger btn-sm"><i data-lucide="file-text"></i>PDF</a>
+    <a href="?export=excel" class="btn btn-outline-secondary btn-sm"><i data-lucide="file-spreadsheet"></i>Excel</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Marca</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Marca</th><th class="text-end">Unidades</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+            {% for row in por_marca %}
+            <tr>
+              <td>{{ row.nombre }}</td>
+              <td class="text-end">{{ row.unidades }}</td>
+              <td class="text-end">${{ row.valor|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-muted">Por Grupo</div>
+      <div class="table-modern-wrap">
+        <table class="table-modern">
+          <thead><tr><th>Grupo</th><th class="text-end">Unidades</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+            {% for row in por_grupo %}
+            <tr>
+              <td>{{ row.nombre }}</td>
+              <td class="text-end">{{ row.unidades }}</td>
+              <td class="text-end">${{ row.valor|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header card-header-danger"><span class="icon-text"><i data-lucide="triangle-alert" class="icon-sm"></i>Productos bajo el stock mínimo</span></div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>Producto</th><th>Marca</th><th class="text-end">Stock</th><th class="text-end">Mínimo</th></tr></thead>
+      <tbody>
+        {% for p in bajo_stock %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{{ p.brand }}</td>
+          <td class="text-end"><span class="badge {% if p.stock == 0 %}badge-error{% else %}badge-warning{% endif %}">{{ p.stock }}</span></td>
+          <td class="text-end">{{ p.stock_minimo }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="4">Sin alertas de stock</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

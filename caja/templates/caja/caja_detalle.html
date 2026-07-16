@@ -1,0 +1,112 @@
+{% extends 'billing/base.html' %}
+{% block title %}Caja #{{ sesion.id }}{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>
+    Caja #{{ sesion.id|stringformat:"04d" }}
+    {% if sesion.estado == 'abierta' %}
+      <span class="badge badge-success">Abierta</span>
+    {% else %}
+      <span class="badge badge-neutral">Cerrada</span>
+    {% endif %}
+  </h2>
+  <div class="list-header-actions">
+    <a href="{% url 'caja:caja_historial' %}" class="btn btn-secondary"><i data-lucide="history"></i>Historial</a>
+    {% if sesion.estado == 'abierta' %}
+      <a href="{% url 'caja:movimiento_crear' sesion.pk %}" class="btn btn-success"><i data-lucide="circle-plus"></i>Registrar Movimiento</a>
+      <a href="{% url 'caja:caja_cerrar' sesion.pk %}" class="btn btn-warning"><i data-lucide="lock"></i>Cerrar Caja</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Usuario</p>
+      <p class="fw-bold">{{ sesion.usuario }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Monto Inicial</p>
+      <p class="fw-bold">${{ sesion.monto_inicial }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Ingresos</p>
+      <p class="fw-bold text-success">${{ sesion.total_ingresos }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Egresos</p>
+      <p class="fw-bold text-danger">${{ sesion.total_egresos }}</p>
+    </div></div>
+  </div>
+</div>
+
+{% if sesion.estado == 'cerrada' %}
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Esperado al Cierre</p>
+      <p class="fw-bold">${{ sesion.monto_esperado_cierre }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Contado (Arqueo)</p>
+      <p class="fw-bold">${{ sesion.monto_contado_cierre }}</p>
+    </div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-flush"><div class="card-body">
+      <p class="text-muted small mb-1">Diferencia</p>
+      <p class="fw-bold {% if sesion.diferencia < 0 %}text-danger{% elif sesion.diferencia > 0 %}text-success{% endif %}">
+        ${{ sesion.diferencia }}
+      </p>
+    </div></div>
+  </div>
+</div>
+{% endif %}
+
+<h5 class="mb-3">Movimientos</h5>
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>#</th><th>Tipo</th><th class="text-end">Monto</th><th>Concepto</th><th>Fecha</th><th>Factura</th></tr>
+      </thead>
+      <tbody>
+        {% for m in movimientos %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td>
+            {% if m.tipo == 'ingreso' %}
+              <span class="badge badge-success">Ingreso</span>
+            {% else %}
+              <span class="badge badge-error">Egreso</span>
+            {% endif %}
+          </td>
+          <td class="text-end fw-bold">${{ m.monto }}</td>
+          <td>{{ m.concepto }}</td>
+          <td>{{ m.fecha|date:"d/m/Y H:i" }}</td>
+          <td>
+            {% if m.invoice %}
+              <a href="{% url 'billing:invoice_detail' m.invoice.pk %}">#{{ m.invoice.id|stringformat:"04d" }}</a>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="6">Sin movimientos todavía</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends 'billing/base.html' %}
+{% block title %}Notificaciones{% endblock %}
+{% block breadcrumbs %}<span class="current">Notificaciones</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Notificaciones</h2>
+  {% if notificaciones_no_leidas %}
+  <form method="post" action="{% url 'notificaciones:notificacion_marcar_todas_leidas' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-secondary"><i data-lucide="check-check"></i>Marcar todas como leídas</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex flex-wrap align-items-center gap-2 w-full">
+    <select name="tipo" class="form-select max-w-220" onchange="this.form.submit()">
+      <option value="">Todos los tipos</option>
+      {% for value, label in tipo_choices %}
+      <option value="{{ value }}" {% if tipo == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="estado" class="form-select max-w-180" onchange="this.form.submit()">
+      <option value="">Todas</option>
+      <option value="no_leidas" {% if estado == 'no_leidas' %}selected{% endif %}>No leídas</option>
+      <option value="leidas" {% if estado == 'leidas' %}selected{% endif %}>Leídas</option>
+    </select>
+    {% if tipo or estado %}
+      <a href="{% url 'notificaciones:notificacion_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr><th>Tipo</th><th>Mensaje</th><th>Fecha</th><th>Estado</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td><span class="badge badge-{{ item.nivel }}">{{ item.get_tipo_display }}</span></td>
+          <td>{{ item.mensaje }}</td>
+          <td>{{ item.fecha|date:"d/m/Y H:i" }}</td>
+          <td>
+            {% if item.leida %}
+              <span class="badge badge-neutral">Leída</span>
+            {% else %}
+              <span class="badge badge-warning">Nueva</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              {% if not item.leida %}
+              <form method="post" action="{% url 'notificaciones:notificacion_marcar_leida' item.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="row-action-btn" title="Marcar leída"><i data-lucide="check"></i></button>
+              </form>
+              {% endif %}
+              {% if item.url %}
+              <a href="{{ item.url }}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="5">No hay notificaciones</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

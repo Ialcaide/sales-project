@@ -1,0 +1,25 @@
+{% extends 'billing/base.html' %}
+{% block title %}Eliminar Pago{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-danger"><span class="icon-text"><i data-lucide="triangle-alert" class="icon-sm"></i>Confirmar eliminación</span></div>
+      <div class="card-body">
+        <p>¿Está seguro de que desea eliminar el pago de <strong>${{ object.valor }}</strong> a la compra
+          <strong>#{{ object.compra_id|stringformat:"04d" }}</strong> ({{ object.compra.document_number }})?</p>
+        {% if object.compra.estado == 'pagada' %}
+          <div class="alert alert-warning">
+            Esta compra ya está cancelada — no se puede eliminar este pago.
+          </div>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger" {% if object.compra.estado == 'pagada' %}disabled{% endif %}><i data-lucide="trash-2"></i>Sí, eliminar</button>
+          <a href="{% url 'pagos:pago_list' %}" class="btn btn-secondary">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

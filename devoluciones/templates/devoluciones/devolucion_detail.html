@@ -1,0 +1,39 @@
+{% extends 'billing/base.html' %}
+{% block title %}Devolución #{{ devolucion.id }}{% endblock %}
+{% block content %}
+
+<div class="card mb-4">
+  <div class="card-header card-header-danger">Devolución #{{ devolucion.id|stringformat:"04d" }}</div>
+  <div class="card-body">
+    <p class="mb-1"><strong>Factura:</strong>
+      <a href="{% url 'billing:invoice_detail' devolucion.factura.pk %}">#{{ devolucion.factura.id|stringformat:"04d" }}</a>
+    </p>
+    <p class="mb-1"><strong>Cliente:</strong> {{ devolucion.factura.customer }}</p>
+    <p class="mb-1"><strong>Fecha:</strong> {{ devolucion.fecha|date:"d/m/Y H:i" }}</p>
+    <p class="mb-1"><strong>Usuario:</strong> {{ devolucion.usuario }}</p>
+    <p class="mb-3"><strong>Motivo:</strong> {{ devolucion.motivo }}</p>
+
+    <div class="table-modern-wrap mb-3">
+      <table class="table-modern">
+        <thead><tr><th>Producto</th><th class="text-end">Cantidad</th><th class="text-end">Subtotal</th></tr></thead>
+        <tbody>
+          {% for detalle in devolucion.detalles.all %}
+          <tr>
+            <td>{{ detalle.invoice_detail.product.name }}</td>
+            <td class="text-end">{{ detalle.quantity }}</td>
+            <td class="text-end">${{ detalle.subtotal }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-content-end">
+      <p class="fw-bold fs-5">Total devuelto: ${{ devolucion.total }}</p>
+    </div>
+
+    <a href="{% url 'devoluciones:devolucion_list' %}" class="btn btn-secondary"><i data-lucide="arrow-left"></i>Volver al historial</a>
+  </div>
+</div>
+
+{% endblock %}

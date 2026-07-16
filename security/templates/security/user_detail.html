@@ -2,10 +2,8 @@
 {% block title %}Usuario: {{ viewed_user.username }}{% endblock %}
 {% block content %}
 
-<div class="card shadow mb-4">
-  <div class="card-header bg-primary text-white">
-    <h4 class="mb-0">Usuario: {{ viewed_user.username }}</h4>
-  </div>
+<div class="card mb-4">
+  <div class="card-header"><h4 class="mb-0">Usuario: {{ viewed_user.username }}</h4></div>
   <div class="card-body">
     <div class="row mb-3">
       <div class="col-md-6">
@@ -17,9 +15,9 @@
         <p>
           <strong>Estado:</strong>
           {% if viewed_user.is_active %}
-            <span class="badge bg-success">Activo</span>
+            <span class="badge badge-success">Activo</span>
           {% else %}
-            <span class="badge bg-danger">Inactivo</span>
+            <span class="badge badge-error">Inactivo</span>
           {% endif %}
         </p>
         <p><strong>Fecha de registro:</strong> {{ viewed_user.date_joined|date:"d/m/Y H:i" }}</p>
@@ -28,17 +26,24 @@
     </div>
 
     <p><strong>Roles:</strong></p>
-    <div class="mb-3">
+    <div class="mb-3 d-flex flex-wrap gap-1">
       {% for g in viewed_user.groups.all %}
-        <span class="badge bg-info">{{ g.name }}</span>
+        <span class="badge badge-info">{{ g.name }}</span>
       {% empty %}
-        <span class="badge bg-secondary">Sin rol</span>
+        <span class="badge badge-neutral">Sin rol</span>
       {% endfor %}
     </div>
 
-    <a href="{% url 'security:user_list' %}" class="btn btn-secondary">Regresar</a>
-    <a href="{% url 'security:user_update' viewed_user.pk %}" class="btn btn-warning">Editar</a>
-    <a href="{% url 'security:user_delete' viewed_user.pk %}" class="btn btn-danger">Eliminar</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'security:user_list' %}" class="btn btn-secondary">Regresar</a>
+      <a href="{% url 'security:user_update' viewed_user.pk %}" class="btn btn-warning"><i data-lucide="pencil"></i>Editar</a>
+      <a href="{% url 'security:user_delete' viewed_user.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Eliminar</a>
+      {% if perms.security.send_whatsapp_userprofile and viewed_user.profile.whatsapp_acceso_url %}
+        <a href="{{ viewed_user.profile.whatsapp_acceso_url }}" target="_blank" rel="noopener" class="btn btn-secondary text-whatsapp" title="Abre WhatsApp con el acceso al sistema ya redactado">
+          {% include 'partials/icon_whatsapp.html' %}Enviar Acceso por WhatsApp
+        </a>
+      {% endif %}
+    </div>
   </div>
 </div>
 

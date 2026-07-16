@@ -1,0 +1,21 @@
+{% comment %}
+Barra de progreso del pedido (Recibido -> Enviado -> Entregado), para las 3
+plantillas que siguen ese ciclo. Uso:
+  {% include "emails/partials/_pedido_stepper.html" with paso_actual="enviado" %}
+paso_actual: "recibido" | "enviado" | "entregado" — resalta ese paso y los anteriores.
+{% endcomment %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 24px;">
+  <tr>
+    <td align="center" width="33%" style="font-size:12px; font-weight:700; color:{% if paso_actual == 'recibido' or paso_actual == 'enviado' or paso_actual == 'entregado' %}#2563EB{% else %}#9CA3AF{% endif %};">
+      &#9679;<br>Recibido
+    </td>
+    <td width="16%" style="border-top:2px solid {% if paso_actual == 'enviado' or paso_actual == 'entregado' %}#2563EB{% else %}#E5E7EB{% endif %}; font-size:1px; line-height:1px;">&nbsp;</td>
+    <td align="center" width="33%" style="font-size:12px; font-weight:700; color:{% if paso_actual == 'enviado' or paso_actual == 'entregado' %}#2563EB{% else %}#9CA3AF{% endif %};">
+      &#9679;<br>Enviado
+    </td>
+    <td width="16%" style="border-top:2px solid {% if paso_actual == 'entregado' %}#2563EB{% else %}#E5E7EB{% endif %}; font-size:1px; line-height:1px;">&nbsp;</td>
+    <td align="center" width="33%" style="font-size:12px; font-weight:700; color:{% if paso_actual == 'entregado' %}#2563EB{% else %}#9CA3AF{% endif %};">
+      &#9679;<br>Entregado
+    </td>
+  </tr>
+</table>

@@ -1,0 +1,52 @@
+/* ==========================================================================
+   DROPDOWNS
+   Menús desplegables (filtros de listado, notificaciones, menú de usuario).
+   Igual que en modals.css, la mecánica de mostrar/ocultar es de Bootstrap
+   JS — acá solo la apariencia.
+   ========================================================================== */
+
+.dropdown { position: relative; }
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  z-index: 1000;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  box-shadow: var(--shadow-dropdown);
+  padding: 8px;
+  min-width: 220px;
+  margin: 0;
+  transform-origin: top right;
+}
+.dropdown-menu.show { display: block; animation: scale-in var(--transition-fast) both; }
+.dropdown-menu.dropdown-menu-md { min-width: 300px; }
+.dropdown-menu.dropdown-menu-lg { min-width: 400px; }
+.dropdown-menu.dropdown-menu-xl { min-width: 600px; }
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+.dropdown-item svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--color-text-secondary); flex-shrink: 0; }
+.dropdown-item:hover { background-color: var(--color-bg); }
+.dropdown-item.dropdown-item-center { justify-content: center; }
+/* Ítem con texto largo que puede envolver en varias líneas (ej. una
+   notificación) en vez de una sola línea de menú corta. */
+.dropdown-item.dropdown-item-wrap { align-items: flex-start; white-space: normal; }
+.dropdown-item.dropdown-item-wrap .dot { margin-top: 6px; }
+.dropdown-header { padding: 8px 12px; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); text-transform: uppercase; color: var(--color-text-secondary); }
+.dropdown-divider { border-top: 1px solid var(--color-border); margin: 6px 0; }
+.dropdown-item-text { padding: 9px 12px; font-size: var(--font-size-sm); color: var(--color-text-secondary); }

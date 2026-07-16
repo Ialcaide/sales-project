@@ -1,0 +1,22 @@
+{% extends 'billing/base.html' %}
+{% block title %}Anular Factura{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header card-header-warning"><span class="icon-text"><i data-lucide="triangle-alert" class="icon-sm"></i>Anular Factura</span></div>
+      <div class="card-body">
+        <p>¿Está seguro de que desea anular la factura <strong>#{{ object.id|stringformat:"04d" }}</strong> de
+          <strong>{{ object.customer }}</strong> por <strong>${{ object.total }}</strong>?</p>
+        <p class="text-muted small">Se restaurará el stock de los productos vendidos. La factura queda marcada como
+          "Anulada" (no se borra) y ya no admitirá cobros.</p>
+        <form method="post">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-warning"><i data-lucide="circle-x"></i>Sí, anular</button>
+          <a href="{% url 'billing:invoice_detail' object.pk %}" class="btn btn-secondary">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

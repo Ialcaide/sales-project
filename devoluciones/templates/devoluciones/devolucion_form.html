@@ -1,0 +1,66 @@
+{% extends 'billing/base.html' %}
+{% block title %}Registrar Devolución{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card mb-4">
+      <div class="card-header card-header-danger">Registrar Devolución — Factura #{{ factura.id|stringformat:"04d" }}</div>
+      <div class="card-body">
+        <p class="mb-1"><strong>Cliente:</strong> {{ factura.customer }}</p>
+        <p class="mb-3"><strong>Total actual de la factura:</strong> ${{ factura.total }}</p>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="table-modern-wrap mb-3">
+            <table class="table-modern">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th class="text-end">Vendido</th>
+                  <th class="text-end">Disponible para devolver</th>
+                  <th class="w-140">Cantidad a devolver</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in lineas_disponibles %}
+                <tr>
+                  <td>{{ item.detail.product.name }}</td>
+                  <td class="text-end">{{ item.detail.quantity }}</td>
+                  <td class="text-end">{{ item.disponible }}</td>
+                  <td>
+                    <input type="number" name="cantidad_{{ item.detail.id }}" class="form-control"
+                           min="0" max="{{ item.disponible }}" value="0">
+                  </td>
+                </tr>
+                {% empty %}
+                <tr class="empty-row"><td colspan="4">No hay productos disponibles para devolver en esta factura.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Motivo</label>
+            {{ form.motivo }}
+            {% for error in form.motivo.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'billing:invoice_detail' factura.pk %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-danger">Registrar Devolución</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

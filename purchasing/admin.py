@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Purchase, PurchaseDetail
+from .models import Bodega, Purchase, PurchaseDetail
 
 class PurchaseDetailInline(admin.TabularInline):
     model = PurchaseDetail
@@ -11,3 +11,8 @@ class PurchaseDetailInline(admin.TabularInline):
 class PurchaseAdmin(admin.ModelAdmin):
     list_display = ['id', 'supplier', 'document_number', 'purchase_date', 'total']
     inlines = [PurchaseDetailInline]
+
+@admin.register(Bodega)
+class BodegaAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'is_active']
+    search_fields = ['nombre']

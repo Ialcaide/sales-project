@@ -34,6 +34,15 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),      # login/logout/reset que trae Django de fábrica
     path('security/', include('security.urls')),                 # /security/... usuarios, roles, permisos
     path('purchases/', include('purchasing.urls')),               # /purchases/... compras
+    path('pagos/', include('pagos.urls')),                         # /pagos/... cuentas por pagar (pagos a proveedores)
+    path('cobros/', include('cobros.urls')),                       # /cobros/... cuentas por cobrar (cobros a clientes)
+    path('caja/', include('caja.urls')),                           # /caja/... apertura/cierre/movimientos de caja
+    path('devoluciones/', include('devoluciones.urls')),           # /devoluciones/... devoluciones de ventas
+    path('notificaciones/', include('notificaciones.urls')),       # /notificaciones/... campanita, historial
+    path('reportes/', include('reportes.urls')),                   # /reportes/... ventas, compras, inventario, caja
+    path('configuracion/', include('configuracion.urls')),         # /configuracion/... IVA, empresa, umbrales
+    path('paypal/', include('paypal_pagos.urls')),                  # /paypal/... return/cancel/webhook
+    path('facturacion-electronica/', include('facturacion_electronica.urls')),  # SRI: reintentar, autorización, RIDE
     path('', include('home.urls')),                                # / -> dashboard (debe ir ANTES que billing.urls)
     path('', include('billing.urls')),                             # /products/, /customers/, /invoices/, etc.
     # django.conf.urls.static.static() (el helper "de manual" de Django)

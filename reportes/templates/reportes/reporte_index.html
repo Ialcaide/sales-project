@@ -1,0 +1,42 @@
+{% extends 'billing/base.html' %}
+{% block title %}Reportes{% endblock %}
+{% block breadcrumbs %}<span class="current">Reportes</span>{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <h2 class="icon-text"><i data-lucide="bar-chart-3" class="icon-lg icon-primary"></i>Reportes</h2>
+  <p class="text-muted mb-0">Reportes por período con exportación a PDF/Excel.</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-card-top"><div class="stat-card-icon tone-warning"><i data-lucide="receipt"></i></div></div>
+      <div class="stat-card-label stat-card-title">Ventas</div>
+      <a href="{% url 'reportes:reporte_ventas' %}" class="text-small fw-bold">Ver reporte →</a>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-card-top"><div class="stat-card-icon tone-error"><i data-lucide="shopping-cart"></i></div></div>
+      <div class="stat-card-label stat-card-title">Compras</div>
+      <a href="{% url 'reportes:reporte_compras' %}" class="text-small fw-bold">Ver reporte →</a>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-card-top"><div class="stat-card-icon tone-success"><i data-lucide="package"></i></div></div>
+      <div class="stat-card-label stat-card-title">Inventario</div>
+      <a href="{% url 'reportes:reporte_inventario' %}" class="text-small fw-bold">Ver reporte →</a>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-card-top"><div class="stat-card-icon tone-info"><i data-lucide="store"></i></div></div>
+      <div class="stat-card-label stat-card-title">Caja</div>
+      <a href="{% url 'reportes:reporte_caja' %}" class="text-small fw-bold">Ver reporte →</a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

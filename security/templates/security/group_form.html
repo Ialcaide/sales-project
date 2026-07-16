@@ -3,19 +3,19 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white"><h4>Rol</h4></div>
+    <div class="card">
+      <div class="card-header card-header-accent">Rol</div>
       <div class="card-body">
         <form method="post">
           {% csrf_token %}
           <div class="mb-3">
-            <label class="form-label fw-bold">Nombre del rol</label>
+            <label class="form-label">Nombre del rol</label>
             {{ form.name }}
           </div>
           <div class="mb-3">
-            <label class="form-label fw-bold">Permisos</label>
+            <label class="form-label">Permisos</label>
             <input type="text" id="permission-filter" class="form-control mb-2" placeholder="Filtrar permisos...">
-            <div class="border rounded p-2" id="permission-list" style="max-height:300px; overflow-y:auto;">
+            <div class="scroll-box" id="permission-list">
               {{ form.permissions }}
             </div>
           </div>

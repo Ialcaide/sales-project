@@ -2,8 +2,9 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from billing.models import Brand, Product, Customer, Invoice, ProductGroup
+from caja.models import SesionCaja
 from purchasing.models import Purchase
-from django.db.models import Count
+from django.db.models import Count, F
 import json
 
 # Esta app solo arma el dashboard de bienvenida (la pantalla que ves justo
@@ -22,10 +23,15 @@ def get_context(request):
         'total_invoices': Invoice.objects.count(),
         'total_purchases': Purchase.objects.count(),
         'total_users': User.objects.count(),
-        'low_stock': Product.objects.filter(stock__lte=5).order_by('stock'),
+        'low_stock': Product.objects.filter(stock__lte=F('stock_minimo')).order_by('stock'),
         'recent_invoices': Invoice.objects.select_related('customer').order_by('-invoice_date')[:5],
         'labels': json.dumps([g.name for g in datos_grupos]),
         'data': json.dumps([g.total for g in datos_grupos]),
+        # Usado por home_vendedor.html/home_cajero.html para mostrar el
+        # estado de caja apenas se entra al dashboard (ver home()).
+        'sesion_caja_abierta': SesionCaja.objects.filter(
+            usuario=request.user, estado=SesionCaja.ABIERTA
+        ).first(),
     }
 
 @login_required
@@ -44,6 +50,8 @@ def home(request):
         template = 'home/home_vendedor.html'
     elif user.groups.filter(name='Analista de Compras').exists():
         template = 'home/home_compras.html'
+    elif user.groups.filter(name='Cajero').exists():
+        template = 'home/home_cajero.html'
     else:
         template = 'home/home_admin.html'
     return render(request, template, context)

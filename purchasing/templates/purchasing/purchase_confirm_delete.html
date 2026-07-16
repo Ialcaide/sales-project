@@ -3,13 +3,13 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <div class="card shadow border-danger">
-      <div class="card-header bg-danger text-white"><h4>Eliminar</h4></div>
+    <div class="card">
+      <div class="card-header card-header-danger"><span class="icon-text"><i data-lucide="triangle-alert" class="icon-sm"></i>Confirmar eliminación</span></div>
       <div class="card-body">
         <p>¿Está seguro de que desea eliminar <strong>{{ object }}</strong>?</p>
         <form method="post">
           {% csrf_token %}
-          <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+          <button type="submit" class="btn btn-danger"><i data-lucide="trash-2"></i>Sí, eliminar</button>
           <a href="{% url 'purchasing:purchase_list' %}" class="btn btn-secondary">Cancelar</a>
         </form>
       </div>

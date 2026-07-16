@@ -1,0 +1,32 @@
+{% extends 'billing/base.html' %}
+{% block title %}Abrir Caja{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header card-header-accent">Abrir Caja</div>
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Monto Inicial (fondo de caja)</label>
+            {{ form.monto_inicial }}
+            {% for error in form.monto_inicial.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'home' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Abrir Caja</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

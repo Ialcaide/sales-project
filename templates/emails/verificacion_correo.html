@@ -1,0 +1,46 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Verificación de correo — botón de verificación y/o código numérico.
+Variables: usuario, verificar_url (opcional), codigo (opcional, ej. "482913"),
+expira_en (opcional).
+{% endcomment %}
+
+{% block preheader %}Confirmá tu dirección de correo para activar tu cuenta en {{ empresa_nombre|default:"TecnoStock S.A." }}.{% endblock %}
+
+{% block header_icon %}
+<div style="width:56px; height:56px; border-radius:50%; background-color:rgba(255,255,255,.16); text-align:center; line-height:56px; font-size:26px; margin:0 auto 16px;">&#128231;</div>
+{% endblock %}
+{% block header_title %}Verificá tu correo{% endblock %}
+{% block header_subtitle %}Un último paso para activar tu cuenta.{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#111827;">Hola {{ usuario }},</p>
+<p style="margin:0 0 8px; font-size:15px; line-height:1.7; color:#374151;">
+  Confirmá que esta es tu dirección de correo para terminar de activar tu cuenta.
+</p>
+
+{% if verificar_url %}
+{% include "emails/partials/_button.html" with url=verificar_url label="Verificar mi correo" %}
+{% endif %}
+
+{% if codigo %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 22px 0;">
+  <tr>
+    <td align="center" style="background-color:#F8FAFC; border:1.5px dashed #CBD5E1; border-radius:12px; padding:22px;">
+      <div style="font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#6B7280; margin-bottom:8px;">Tu código de verificación</div>
+      <div style="font-size:32px; font-weight:800; letter-spacing:.28em; color:#2563EB; font-family:'Courier New',ui-monospace,monospace;">{{ codigo }}</div>
+    </td>
+  </tr>
+</table>
+{% endif %}
+
+{% if expira_en %}
+  {% include "emails/partials/_alert.html" with tipo="info" texto="Este código/enlace vence en "|add:expira_en %}
+{% else %}
+  {% include "emails/partials/_alert.html" with tipo="info" texto="Este código/enlace vence pronto — no lo compartas con nadie." %}
+{% endif %}
+
+<p style="margin:20px 0 0; font-size:13px; line-height:1.6; color:#9CA3AF;">
+  Si no creaste una cuenta en {{ empresa_nombre|default:"TecnoStock S.A." }}, podés ignorar este mensaje.
+</p>
+{% endblock %}

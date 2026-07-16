@@ -21,7 +21,7 @@ from django.core.paginator import Paginator
 from django.db import models
 
 from shared.mixins import GroupRequiredMixin
-from shared.notifications import send_credentials_email, send_whatsapp_message
+from shared.notifications import send_credentials_email, send_whatsapp_message, get_admin_recipients
 from shared.pagination import build_extra_qs, get_page_range
 from billing.export_mixins import ExportMixin
 from .forms import (
@@ -61,9 +61,45 @@ def _account_created_message(user, password, role):
     return subject, body
 
 
-def _account_updated_message(user):
+def _elegir_plantilla_actualizacion(user, old_is_active, new_is_active, old_group_names, new_group_names, new_password=None):
+    """De los posibles cambios en UserUpdateView, elige la plantilla HTML más
+    específica para lo que de verdad cambió: bloqueo/desbloqueo de cuenta
+    primero (es lo más sensible), después cambio de rol, y si no cambió nada
+    de eso (solo datos de contacto o se restableció la contraseña) cae al
+    respaldo genérico 'actualizacion_cuenta.html' (mismo contenido que
+    _account_updated_message, en HTML)."""
+    fecha = timezone.now().strftime('%d/%m/%Y %H:%M')
+    login_url = f'{settings.SITE_URL}{reverse("security:login")}'
+
+    if old_is_active and not new_is_active:
+        return 'cuenta_bloqueada.html', {
+            'usuario': _full_name(user), 'motivo': 'Un administrador desactivó tu cuenta.', 'fecha': fecha,
+        }
+    if not old_is_active and new_is_active:
+        return 'cuenta_desbloqueada.html', {
+            'usuario': _full_name(user), 'fecha': fecha, 'login_url': login_url,
+        }
+    if old_group_names != new_group_names:
+        return 'cambio_rol_usuario.html', {
+            'usuario': _full_name(user),
+            'rol_anterior': ', '.join(sorted(old_group_names)) or 'Sin rol asignado',
+            'rol_nuevo': ', '.join(sorted(new_group_names)) or 'Sin rol asignado',
+            'fecha': fecha, 'login_url': login_url,
+        }
+    return 'actualizacion_cuenta.html', {
+        'usuario': _full_name(user), 'username': user.username, 'correo': user.email,
+        'roles': ', '.join(sorted(new_group_names)) or 'Sin rol asignado',
+        'estado': 'Activo' if new_is_active else 'Inactivo',
+        'nueva_password': new_password, 'fecha': fecha, 'login_url': login_url,
+    }
+
+
+def _account_updated_message(user, new_password=None):
     login_url = f'{settings.SITE_URL}{reverse("security:login")}'
     roles = ', '.join(g.name for g in user.groups.all()) or 'Sin rol asignado'
+    # Si el admin restableció la contraseña, se la avisamos en texto plano —
+    # es la única vez que la tenemos disponible (luego solo existe encriptada).
+    password_linea = f'Nueva contraseña: {new_password}\n' if new_password else ''
     body = (
         f'Estimado/a {_full_name(user)},\n\n'
         f'Le informamos que su cuenta en el Sistema de Ventas TecnoStock ha sido actualizada '
@@ -71,6 +107,7 @@ def _account_updated_message(user):
         f'Datos actuales de su cuenta:\n\n'
         f'Usuario: {user.username}\n'
         f'Correo: {user.email}\n'
+        f'{password_linea}'
         f'Rol(es): {roles}\n'
         f'Estado: {"Activo" if user.is_active else "Inactivo"}\n\n'
         f'Puede ingresar al sistema a través del siguiente enlace:\n'
@@ -127,7 +164,15 @@ class RegisterView(AdminOnlyMixin, CreateView):
         # devuelve True/False (nunca lanza una excepción) para poder avisarle
         # al admin qué canal sí/no funcionó, sin romper la creación del usuario.
         subject, body = _account_created_message(self.object, password, role)
-        email_sent = send_credentials_email(self.object.email, subject, body)
+        login_url = f'{settings.SITE_URL}{reverse("security:login")}'
+        email_sent = send_credentials_email(
+            self.object.email, subject, body,
+            html_template='bienvenida.html',
+            html_context={
+                'usuario': _full_name(self.object), 'username': self.object.username,
+                'rol': role.name, 'login_url': login_url,
+            },
+        )
         whatsapp_sent = send_whatsapp_message(phone, body)
 
         if email_sent and whatsapp_sent:
@@ -136,6 +181,31 @@ class RegisterView(AdminOnlyMixin, CreateView):
             messages.warning(self.request, f'Usuario "{self.object.username}" creado. Credenciales enviadas por correo (WhatsApp no disponible por ahora).')
         else:
             messages.warning(self.request, f'Usuario "{self.object.username}" creado, pero no se pudo enviar las credenciales automáticamente.')
+
+        # Aviso a los administradores (evento nuevo, no existía antes) — nunca
+        # bloquea ni afecta los mensajes de arriba, es "best effort" como todo
+        # lo demás en este archivo.
+        for admin_nombre, admin_email in get_admin_recipients():
+            send_credentials_email(
+                admin_email,
+                f'Nuevo usuario registrado — {self.object.username}',
+                (
+                    f'Hola {admin_nombre},\n\n'
+                    f'Se registró un nuevo usuario en el sistema:\n\n'
+                    f'Nombre: {_full_name(self.object)}\n'
+                    f'Usuario: {self.object.username}\n'
+                    f'Rol asignado: {role.name}\n\n'
+                    f'Atentamente,\n'
+                    f'Sistema de Ventas TecnoStock'
+                ),
+                html_template='nuevo_usuario_registrado.html',
+                html_context={
+                    'admin_nombre': admin_nombre, 'nuevo_usuario_nombre': _full_name(self.object),
+                    'nuevo_usuario_username': self.object.username, 'rol': role.name,
+                    'fecha': timezone.now().strftime('%d/%m/%Y %H:%M'),
+                    'usuario_url': f'{settings.SITE_URL}{reverse("security:user_detail", args=[self.object.pk])}',
+                },
+            )
         return response
 
 
@@ -198,7 +268,11 @@ class RecoverCredentialsView(FormView):
                     messages.error(self.request, 'Este usuario no tiene un número de WhatsApp registrado. Intenta con correo.')
                     return self.render_to_response(self.get_context_data(form=form))
             else:
-                send_credentials_email(user.email, 'Recuperación de Credenciales — Sistema de Ventas TecnoStock', body)
+                send_credentials_email(
+                    user.email, 'Recuperación de Credenciales — Sistema de Ventas TecnoStock', body,
+                    html_template='recuperar_password.html',
+                    html_context={'usuario': _full_name(user), 'reset_url': reset_url},
+                )
 
         messages.success(self.request, 'Si los datos son correctos, te hemos enviado instrucciones para recuperar tu acceso.')
         return super().form_valid(form)
@@ -320,6 +394,22 @@ def password_change_confirm(request):
     del request.session[PASSWORD_CODE_SESSION_KEY]
     del request.session[PASSWORD_CODE_EXPIRES_KEY]
 
+    send_credentials_email(
+        request.user.email, 'Tu contraseña fue actualizada — Sistema de Ventas TecnoStock',
+        (
+            f'Estimado/a {_full_name(request.user)},\n\n'
+            f'Te confirmamos que tu contraseña se actualizó correctamente.\n\n'
+            f'Si no fuiste vos quien hizo este cambio, contacta al administrador del sistema de inmediato.\n\n'
+            f'Atentamente,\n'
+            f'Administración — Sistema de Ventas TecnoStock'
+        ),
+        html_template='password_cambiada.html',
+        html_context={
+            'usuario': _full_name(request.user),
+            'fecha': timezone.now().strftime('%d/%m/%Y %H:%M'),
+            'ip': request.META.get('REMOTE_ADDR', '-'),
+        },
+    )
     messages.success(request, 'Tu contraseña se actualizó correctamente.')
     return redirect('security:profile')
 
@@ -406,13 +496,33 @@ class UserUpdateView(AdminOnlyMixin, UpdateView):
     success_url = reverse_lazy('security:user_list')
 
     def form_valid(self, form):
+        # Snapshot del estado ANTES de guardar: self.object ya trae los
+        # valores NUEVOS volcados en memoria en este punto (Django los aplica
+        # sobre la misma instancia durante form.is_valid(), antes de llegar
+        # acá), así que el único jeito de saber qué cambió de VERDAD es traer
+        # el estado viejo con una consulta aparte.
+        old = User.objects.prefetch_related('groups').get(pk=self.object.pk)
+        old_is_active = old.is_active
+        old_group_names = set(old.groups.values_list('name', flat=True))
+
+        # cleaned_data solo existe DESPUÉS de is_valid(); hay que leer la
+        # contraseña nueva ANTES de super().form_valid() (que llama a
+        # form.save(), dejándola encriptada) para poder avisarla en texto
+        # plano — la única vez que se tiene disponible.
+        new_password = form.cleaned_data.get('new_password1') or None
         response = super().form_valid(form)
 
-        # A diferencia de RegisterView, acá NO hay contraseña que avisar
-        # (editar un usuario no cambia su contraseña) — solo se notifica que
-        # su cuenta fue modificada, con sus datos actuales.
-        subject, body = _account_updated_message(self.object)
-        email_sent = send_credentials_email(self.object.email, subject, body)
+        new_is_active = self.object.is_active
+        new_group_names = set(self.object.groups.values_list('name', flat=True))
+
+        subject, body = _account_updated_message(self.object, new_password=new_password)
+        html_template, html_context = _elegir_plantilla_actualizacion(
+            self.object, old_is_active, new_is_active, old_group_names, new_group_names,
+            new_password=new_password,
+        )
+        email_sent = send_credentials_email(
+            self.object.email, subject, body, html_template=html_template, html_context=html_context,
+        )
         profile = getattr(self.object, 'profile', None)
         whatsapp_sent = send_whatsapp_message(profile.phone if profile else '', body)
 
@@ -535,6 +645,12 @@ MODEL_TRANSLATIONS = {
     'customerprofile': 'perfil de cliente',
     'invoicedetail': 'detalle de factura',
     'purchasedetail': 'detalle de compra',
+    'pagocompra': 'pago de compra',
+    'cobrofactura': 'cobro de factura',
+    'sesioncaja': 'sesión de caja',
+    'movimientocaja': 'movimiento de caja',
+    'devolucionventa': 'devolución de venta',
+    'devoluciondetalle': 'detalle de devolución',
 }
 
 def translate_permission_name(name):
@@ -563,16 +679,43 @@ def translate_permission_name(name):
 # Django crea 4 permisos por cada modelo automáticamente: add_x, change_x,
 # delete_x, view_x. Estos diccionarios traducen ese prefijo a la etiqueta e
 # ícono que se muestra en cada casilla de la pantalla de permisos.
-ACTION_LABELS = {'view': 'Ver', 'add': 'Agregar', 'change': 'Editar', 'delete': 'Eliminar'}
-ACTION_ICONS = {'view': 'bi-eye', 'add': 'bi-plus-circle', 'change': 'bi-pencil', 'delete': 'bi-trash'}
-ACTION_ORDER = ['view', 'add', 'change', 'delete']  # orden en que aparecen las casillas
+#
+# 'access' es un quinto permiso, personalizado (no lo crea Django solo —
+# está declarado a mano en Meta.permissions de cada modelo con lista propia,
+# ej. billing.Invoice -> 'access_invoice_module'). Antes, 'view_x' controlaba
+# a la vez el botón "Ver" de un registro puntual Y si el listado/módulo
+# completo cargaba. Ahora quedan separados: 'access' = entrar al módulo
+# (la lista), 'view' = solo el botón/acceso a un registro puntual (detalle,
+# PDF). Va primero en el orden porque es el "portón" del módulo.
+#
+# 'export_pdf'/'export_excel'/'send_whatsapp' son de DOS palabras (a
+# diferencia de add/change/delete/view/access, de una sola) — controlan los
+# botones "Exportar PDF"/"Exportar Excel"/"Enviar por WhatsApp" que ya
+# existían en varios listados sin permiso propio (antes alcanzaba con
+# poder ver la lista para poder exportarla o mandar el WhatsApp).
+ACTION_LABELS = {
+    'access': 'Acceso al módulo', 'view': 'Ver', 'add': 'Agregar', 'change': 'Editar', 'delete': 'Eliminar',
+    'export_pdf': 'Exportar PDF', 'export_excel': 'Exportar Excel', 'send_whatsapp': 'Enviar por WhatsApp',
+}
+ACTION_ICONS = {
+    'access': 'bi-door-open', 'view': 'bi-eye', 'add': 'bi-plus-circle', 'change': 'bi-pencil', 'delete': 'bi-trash',
+    'export_pdf': 'bi-file-earmark-pdf', 'export_excel': 'bi-file-earmark-excel', 'send_whatsapp': 'bi-whatsapp',
+}
+ACTION_ORDER = [
+    'access', 'view', 'add', 'change', 'delete', 'export_pdf', 'export_excel', 'send_whatsapp',
+]  # orden en que aparecen las casillas
 
 
 def _permission_action(codename):
-    """De 'add_product' extrae 'add'. Si el codename es uno personalizado
-    (no sigue el patrón add_/change_/delete_/view_), devuelve None."""
-    prefix = codename.split('_', 1)[0]
-    return prefix if prefix in ACTION_LABELS else None
+    """De 'add_product' extrae 'add'; de 'access_invoice_module' extrae
+    'access'; de 'export_pdf_invoice' extrae 'export_pdf' (dos palabras).
+    Prueba los prefijos de más largo a más corto para que uno de dos
+    palabras no quede opacado por uno de una sola. Si el codename es uno
+    personalizado que no sigue ninguno de estos patrones, devuelve None."""
+    for action in sorted(ACTION_LABELS, key=len, reverse=True):
+        if codename.startswith(f'{action}_'):
+            return action
+    return None
 
 
 # === PERMISOS ===
@@ -719,6 +862,12 @@ def permission_list(request):
         else:
             return exporter.export_to_excel(permissions)
 
+    # Usuarios que tienen el rol seleccionado — se usan para el cartel de
+    # confirmación ("estos son los usuarios a los que afecta este cambio"),
+    # ya que cualquier cambio en los permisos de un rol se aplica de
+    # inmediato a TODOS sus usuarios (no hace falta "sincronizar" nada aparte).
+    role_users = target.user_set.all().order_by('username') if target_type == 'group' and target else []
+
     context = {
         'groups': groups,
         'all_users': all_users,
@@ -727,6 +876,7 @@ def permission_list(request):
         'target_type': target_type,
         'target': target,
         'model_cards': model_cards,
+        'role_users': role_users,
     }
     return render(request, 'security/permission_list.html', context)
 

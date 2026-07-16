@@ -1,0 +1,54 @@
+/* ==========================================================================
+   RESPONSIVE
+   Todos los breakpoints del sistema en un solo lugar, agrupados por ancho
+   de pantalla (no por componente) — para saber qué cambia en móvil/tablet
+   sin tener que abrir sidebar.css, header.css y layout.css por separado.
+   Los componentes en sí (cards, botones, tablas...) son fluidos por diseño
+   y no necesitan reglas propias acá.
+   ========================================================================== */
+
+/* ---------- ≤ 991px: tablet — el sidebar pasa a ser un drawer ---------- */
+@media (max-width: 991.98px) {
+  .sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width);
+    box-shadow: var(--shadow-modal);
+  }
+  .app-shell.sidebar-mobile-open .sidebar { transform: translateX(0); }
+  .app-shell.sidebar-collapsed .sidebar { width: var(--sidebar-width); }
+  .app-shell.sidebar-collapsed .sidebar-brand-text { display: flex; }
+  .app-shell.sidebar-collapsed .nav-group-title { display: block; }
+  .app-shell.sidebar-collapsed .nav-item-link { justify-content: flex-start; padding: 10px var(--space-2); }
+  .app-shell.sidebar-collapsed .nav-item-link span.nav-item-label { display: inline; }
+
+  .header, .app-shell.sidebar-collapsed .header { left: 0; }
+  .header-mobile-toggle { display: inline-flex; }
+  .header-toggle-btn.header-desktop-toggle { display: none; }
+  .header-search { display: none; }
+  .breadcrumbs { display: none; }
+
+  .main-column, .app-shell.sidebar-collapsed .main-column { margin-left: 0; }
+
+  /* Tarjetas KPI y filtros pasan a una sola columna */
+  .stat-card { margin-bottom: 0; }
+
+  /* Wizard de 2 columnas (ej. crear compra) colapsa a 1 sola columna, con
+     el panel de resumen pasando a estar ARRIBA (order) para que los
+     totales sigan siendo lo primero que se ve antes de llenar el wizard. */
+  .wizard-layout { grid-template-columns: 1fr; }
+  .wizard-sidebar { position: static; order: -1; }
+}
+
+/* ---------- ≤ 575px: móvil ---------- */
+@media (max-width: 575.98px) {
+  .main-content { padding-left: var(--space-2); padding-right: var(--space-2); }
+  .user-menu-trigger .user-name { display: none; }
+
+  .list-header, .list-toolbar { flex-direction: column; align-items: stretch; }
+  .list-header-actions { justify-content: flex-start; }
+
+  .factura-info { grid-template-columns: 1fr; }
+  .factura-wrapper { padding: var(--space-3); }
+
+  .modal-dialog { margin: var(--space-2); }
+}

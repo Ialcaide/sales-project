@@ -1,0 +1,26 @@
+{% extends 'billing/base.html' %}
+{% load static %}
+{% block title %}Código de barras — {{ product.name }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/print.css' %}">
+{% endblock %}
+{% block content %}
+
+<div class="list-header no-print">
+  <h2>Código de Barras</h2>
+  <div class="list-header-actions">
+    <button type="button" class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i>Imprimir</button>
+    <a href="{% url 'billing:product_detail' product.pk %}" class="btn btn-secondary">Volver</a>
+  </div>
+</div>
+
+<div class="d-flex justify-content-center">
+  <div class="card barcode-label text-center">
+    <div class="fw-bold mb-1">{{ product.name }}</div>
+    <div class="text-muted small mb-2">{{ product.brand }}</div>
+    <img src="{% url 'billing:product_barcode_image' product.pk %}" alt="Código de barras" class="img-fluid mb-2">
+    <div class="fs-5 fw-bold text-success">${{ product.unit_price }}</div>
+  </div>
+</div>
+
+{% endblock %}

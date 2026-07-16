@@ -1,0 +1,37 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Pedido recibido — primer paso del ciclo del pedido.
+Variables: usuario, pedido_numero, fecha, total, productos (lista de dicts:
+nombre, cantidad), pedido_url (opcional).
+{% endcomment %}
+
+{% block preheader %}Recibimos tu pedido #{{ pedido_numero }} y ya lo estamos procesando.{% endblock %}
+
+{% block header_icon %}
+<div style="width:56px; height:56px; border-radius:50%; background-color:rgba(255,255,255,.16); text-align:center; line-height:56px; font-size:26px; margin:0 auto 16px;">&#128203;</div>
+{% endblock %}
+{% block header_title %}¡Pedido recibido!{% endblock %}
+{% block header_subtitle %}Tu pedido #{{ pedido_numero }} ya está en proceso.{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#111827;">Hola {{ usuario }},</p>
+<p style="margin:0 0 8px; font-size:15px; line-height:1.7; color:#374151;">
+  Confirmamos que recibimos tu pedido. Te vamos a avisar en cada paso hasta que llegue a tus manos.
+</p>
+
+{% include "emails/partials/_pedido_stepper.html" with paso_actual="recibido" %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC; border:1px solid #E5E7EB; border-radius:12px; margin:4px 0 8px;">
+  <tr>
+    <td style="padding: 6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/partials/_data_row.html" with label="N° de pedido" valor=pedido_numero %}
+        {% include "emails/partials/_data_row.html" with label="Fecha" valor=fecha %}
+        {% include "emails/partials/_data_row.html" with label="Total" valor=total es_ultima=True %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% if pedido_url %}{% include "emails/partials/_button.html" with url=pedido_url label="Ver mi pedido" %}{% endif %}
+{% endblock %}

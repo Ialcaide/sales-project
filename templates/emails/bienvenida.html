@@ -1,0 +1,38 @@
+{% extends "emails/base_email.html" %}
+{% comment %}
+Bienvenida — cuando un administrador crea la cuenta de un usuario nuevo.
+Variables: usuario (nombre para mostrar), username (usuario de acceso),
+rol, login_url. Todas heredadas de base_email.html: empresa_nombre,
+site_url, current_year, support_email.
+{% endcomment %}
+
+{% block preheader %}Tu cuenta en {{ empresa_nombre|default:"TecnoStock S.A." }} ya está lista para usarse.{% endblock %}
+
+{% block header_icon %}
+<div style="width:56px; height:56px; border-radius:50%; background-color:rgba(255,255,255,.16); text-align:center; line-height:56px; font-size:26px; margin:0 auto 16px;">&#128075;</div>
+{% endblock %}
+{% block header_title %}¡Bienvenido{% if usuario %}, {{ usuario }}{% endif %}!{% endblock %}
+{% block header_subtitle %}Tu cuenta ha sido creada correctamente.{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 18px; font-size:15px; line-height:1.6; color:#111827;">Hola {{ usuario }},</p>
+<p style="margin:0 0 18px; font-size:15px; line-height:1.7; color:#374151;">
+  Ya podés ingresar a <strong>{{ empresa_nombre|default:"TecnoStock S.A." }}</strong> con la cuenta que se creó para vos.
+  A continuación tenés tus datos de acceso:
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8FAFC; border:1px solid #E5E7EB; border-radius:12px; margin:8px 0 4px;">
+  <tr>
+    <td style="padding: 6px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% include "emails/partials/_data_row.html" with label="Usuario" valor=username %}
+        {% if rol %}{% include "emails/partials/_data_row.html" with label="Rol asignado" valor=rol es_ultima=True %}{% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% include "emails/partials/_button.html" with url=login_url|default:site_url label="Iniciar sesión" %}
+
+{% include "emails/partials/_alert.html" with tipo="info" texto="Por tu seguridad, te recomendamos cambiar tu contraseña la primera vez que ingreses." %}
+{% endblock %}

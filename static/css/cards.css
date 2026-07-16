@@ -1,0 +1,96 @@
+/* ==========================================================================
+   CARDS
+   El contenedor visual más usado del sistema: fondo blanco, esquinas de
+   20px, sombra sutil, elevación al hover. Incluye sus variantes de mayor
+   nivel: .form-wrapper (formulario sin card alrededor), .factura-* (RIDE/
+   comprobante impreso) e .info-box (bloque de datos dentro de la factura).
+   ========================================================================== */
+
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+  margin-bottom: var(--space-3);
+}
+.card:hover { box-shadow: var(--shadow-card-hover); }
+.card.card-flush { margin-bottom: 0; }
+
+.card-header {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-top-left-radius: var(--radius-card);
+  border-top-right-radius: var(--radius-card);
+}
+.card-header.card-header-accent { background: var(--color-primary); color: #fff; }
+.card-header.card-header-danger { background: var(--color-error-soft-bg); color: var(--color-error-soft-text); }
+.card-header.card-header-success { background: var(--color-success-soft-bg); color: var(--color-success-soft-text); }
+.card-header.card-header-warning { background: var(--color-warning-soft-bg); color: var(--color-warning-soft-text); }
+.card-header.card-header-muted { background: var(--color-bg); color: var(--color-text-secondary); }
+
+.card-body { padding: var(--space-3); }
+.card-body.card-body-tight { padding: var(--space-1) var(--space-3); }
+.card-body.card-body-spacious { padding: var(--space-6) var(--space-3); text-align: center; }
+.card-body.card-body-no-bottom { padding-bottom: 0; }
+
+/* Caja de totales (factura/compra/cobro) alineada a la derecha del formulario */
+.card.card-summary { min-width: 280px; margin-bottom: 0; }
+
+.card-footer {
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+  border-bottom-left-radius: var(--radius-card);
+  border-bottom-right-radius: var(--radius-card);
+}
+
+/* ---------- Formulario sin card (proveedor y otros) ---------- */
+
+.form-wrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.form-wrapper.form-wrapper-wide { max-width: 1100px; }
+
+.form-header {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-3); padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.form-header-icon {
+  width: 52px; height: 52px; border-radius: var(--radius-input);
+  background: var(--color-primary-light); color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.form-header-icon svg { width: var(--icon-lg); height: var(--icon-lg); }
+.form-header-text h4 { margin: 0; }
+.form-header-text p { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-base); }
+
+/* ---------- Factura / RIDE impresa ---------- */
+
+.factura-wrapper { background: var(--color-surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: var(--space-6); max-width: 860px; margin: 0 auto; }
+.factura-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 2px solid var(--color-border); }
+.factura-empresa h2 { font-size: var(--font-size-2xl); font-weight: var(--font-weight-extrabold); color: var(--color-primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+.factura-empresa p { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin: 0; }
+.factura-numero { text-align: right; }
+.factura-numero .num-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-secondary); }
+.factura-numero .num { font-size: 1.7rem; font-weight: var(--font-weight-extrabold); color: var(--color-primary); }
+.factura-numero .fecha { font-size: var(--font-size-sm); color: var(--color-text-secondary); }
+.factura-info { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-4); }
+.factura-footer { margin-top: var(--space-4); padding-top: var(--space-2); border-top: 2px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; }
+.factura-footer p { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin: 0; }
+
+.info-box { background: var(--color-bg); border-radius: var(--radius-input); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); }
+.info-box h6 { font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); text-transform: uppercase; letter-spacing: .08em; color: var(--color-text-secondary); margin-bottom: 10px; }
+.info-box p { font-size: var(--font-size-md); color: var(--color-text-primary); margin: 4px 0; }

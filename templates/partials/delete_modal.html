@@ -1,0 +1,23 @@
+{% load static %}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalTitle">Confirmar eliminación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <form id="deleteModalForm" method="post" action="">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p class="mb-0">¿Estás seguro de que deseas eliminar <strong id="deleteModalLabel"></strong>? Esta acción no se puede deshacer.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">
+            <i data-lucide="trash-2"></i>Eliminar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

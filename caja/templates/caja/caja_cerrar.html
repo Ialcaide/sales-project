@@ -1,0 +1,43 @@
+{% extends 'billing/base.html' %}
+{% block title %}Cerrar Caja{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header card-header-warning">Cerrar Caja #{{ sesion.id|stringformat:"04d" }}</div>
+      <div class="card-body">
+        <div class="card mb-4">
+          <div class="card-body">
+            <p class="mb-1"><strong>Monto Inicial:</strong> ${{ sesion.monto_inicial }}</p>
+            <p class="mb-1"><strong>Ingresos:</strong> ${{ sesion.total_ingresos }}</p>
+            <p class="mb-1"><strong>Egresos:</strong> ${{ sesion.total_egresos }}</p>
+            <p class="mb-0"><strong>Esperado en Caja:</strong> <span class="fw-bold text-primary">${{ sesion.monto_esperado_cierre }}</span></p>
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Monto Contado (arqueo físico)</label>
+            {{ form.monto_contado_cierre }}
+            <div class="form-text">Cuenta el efectivo que hay realmente en la caja y regístralo aquí.</div>
+            {% for error in form.monto_contado_cierre.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'caja:caja_detalle' sesion.pk %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-warning">Cerrar Caja</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

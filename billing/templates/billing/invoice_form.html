@@ -1,145 +1,584 @@
 {% extends 'billing/base.html' %}
+{% load static %}
 {% block title %}{{ title }}{% endblock %}
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+{% comment %}
+Select2 genera su propio DOM con clases fijas de la librería — no se
+puede re-estilizar con clases del design system, así que necesita este
+único bloque de estilos con selectores del propio widget (no es un
+atributo style inline, es CSS con nombre y alcance de página, como
+cualquier otro módulo). Se usa tanto para el cliente (paso 1) como para
+cada producto (paso 2).
+{% endcomment %}
 <style>
-.select2-container .select2-selection--single { height: 44px !important; border: 1.5px solid #c7d2fe !important; border-radius: 10px !important; }
-.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 42px !important; padding-left: 12px !important; color: #334155 !important; }
+.select2-container .select2-selection--single { height: 44px !important; border: 1.5px solid var(--color-border) !important; border-radius: var(--radius-input) !important; background-color: var(--color-surface) !important; }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 42px !important; padding-left: 14px !important; color: var(--color-text-primary) !important; }
 .select2-container--default .select2-selection--single .select2-selection__arrow { height: 42px !important; }
-.select2-dropdown { border: 1.5px solid #c7d2fe !important; border-radius: 10px !important; box-shadow: 0 8px 24px rgba(78,84,200,0.10) !important; }
-.select2-container--default .select2-results__option--highlighted { background-color: #4e54c8 !important; }
-.select2-search__field { border-radius: 8px !important; border: 1.5px solid #c7d2fe !important; padding: 6px 10px !important; }
+.select2-dropdown { border: 1.5px solid var(--color-border) !important; border-radius: var(--radius-input) !important; box-shadow: var(--shadow-dropdown) !important; }
+.select2-container--default .select2-results__option--highlighted { background-color: var(--color-primary) !important; }
+.select2-search__field { border-radius: var(--radius-sm) !important; border: 1.5px solid var(--color-border) !important; padding: 6px 10px !important; }
 .select2-container { width: 100% !important; }
 </style>
 {% endblock %}
 {% block content %}
 
-<div class="card shadow border-0 mb-4">
-  <div class="card-header text-dark fw-bold fs-5" style="background-color:#f6c23e;">
-    {{ title }}
-  </div>
-  <div class="card-body p-4">
+<div class="card mb-4">
+  <div class="card-header">{{ title }}</div>
+  <div class="card-body">
+
+    <div class="wizard-steps">
+      <div class="wizard-step-item is-active" data-step-indicator="1">
+        <span class="wizard-step-circle">1</span>
+        <span class="wizard-step-label">Cliente</span>
+      </div>
+      <div class="wizard-step-connector" data-connector="1"></div>
+      <div class="wizard-step-item" data-step-indicator="2">
+        <span class="wizard-step-circle">2</span>
+        <span class="wizard-step-label">Detalles</span>
+      </div>
+      <div class="wizard-step-connector" data-connector="2"></div>
+      <div class="wizard-step-item" data-step-indicator="3">
+        <span class="wizard-step-circle">3</span>
+        <span class="wizard-step-label">Facturación</span>
+      </div>
+    </div>
+
     <form method="post" id="invoice-form">
       {% csrf_token %}
       {{ formset.management_form }}
 
-      <!-- CLIENTE -->
-      <div class="card mb-4 border">
-        <div class="card-header bg-light fw-bold">Información del Cliente</div>
-        <div class="card-body">
-          <div class="mb-3">
-            <label class="form-label fw-bold">Seleccionar Cliente</label>
-            {{ form.customer }}
-            {% for error in form.customer.errors %}
-              <div class="text-danger small">{{ error }}</div>
-            {% endfor %}
-          </div>
-          <div id="customer-info" class="p-3 bg-light rounded border" style="display:none;">
-            <p class="fw-bold text-muted small mb-2">Datos del Cliente</p>
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Identificación (DNI/RUC)</label>
-                <input type="text" id="c-dni" class="form-control form-control-sm" readonly>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Nombres</label>
-                <input type="text" id="c-first" class="form-control form-control-sm" readonly>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Apellidos</label>
-                <input type="text" id="c-last" class="form-control form-control-sm" readonly>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Correo Electrónico</label>
-                <input type="text" id="c-email" class="form-control form-control-sm" readonly>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Teléfono/Celular</label>
-                <input type="text" id="c-phone" class="form-control form-control-sm" readonly>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small text-muted">Dirección</label>
-                <input type="text" id="c-address" class="form-control form-control-sm" readonly>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
 
-      <!-- DETALLES -->
-      <div class="card mb-4 border">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <span class="fw-bold">Detalles de la Factura</span>
-          <button type="button" class="btn btn-sm btn-success" id="add-row">+ Agregar Producto</button>
-        </div>
-        <div class="card-body p-0">
-          <table class="table table-bordered mb-0" id="details-table">
-            <thead class="table-light">
-              <tr>
-                <th>Producto</th>
-                <th style="width:100px;">Cantidad</th>
-                <th style="width:150px;">Precio Unitario ($)</th>
-                <th style="width:120px;">Subtotal</th>
-                <th style="width:60px;">Eliminar</th>
-              </tr>
-            </thead>
-            <tbody id="formset-body">
-              {% for detail_form in formset %}
-              <tr class="detail-row">
-                <td>
-                  {{ detail_form.id }}
-                  <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
-                    <option value="">Buscar producto...</option>
-                    {% for p in detail_form.product.field.queryset %}
-                      <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
-                    {% endfor %}
-                  </select>
-                  <small class="text-muted stock-info"></small>
-                </td>
-                <td>
-                  <input type="number" name="{{ detail_form.quantity.html_name }}" class="form-control quantity-input" value="{{ detail_form.quantity.value|default:1 }}" min="1">
-                </td>
-                <td>
-                  <input type="number" name="{{ detail_form.unit_price.html_name }}" class="form-control price-input bg-light" value="{{ detail_form.unit_price.value|default:'' }}" step="0.01" readonly>
-                </td>
-                <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-                <td class="text-center align-middle">
-                  <button type="button" class="btn btn-sm btn-danger remove-row">✕</button>
-                  {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- TOTALES -->
-      <div class="d-flex justify-content-end mb-4">
-        <div class="card border" style="min-width:280px;">
+      <!-- PASO 1: CLIENTE -->
+      <div class="wizard-step animate-fade-in" data-step="1">
+        <div class="card mb-4">
+          <div class="card-header card-header-muted">Información del Cliente</div>
           <div class="card-body">
-            <div class="d-flex justify-content-between mb-2">
-              <span>Subtotal:</span>
-              <span id="summary-subtotal" class="fw-bold">$0.00</span>
+            {# Sigue siendo el campo real que llega al servidor (InvoiceForm.clean())
+               — las tarjetas de abajo solo controlan su estado por JS,
+               ver toggleConsumidorFinal() en invoice-wizard.js. #}
+            <div class="d-none-force">{{ form.consumidor_final }}</div>
+
+            <div class="mb-3">
+              <label class="form-label">¿Con qué datos se registra el cliente?</label>
+              <div class="option-cards" id="modo-cliente-choice">
+                <label class="option-card is-checked">
+                  <input type="radio" name="modo_cliente" value="consumidor_final" checked>
+                  <span class="option-card-icon"><i data-lucide="user-x"></i></span>
+                  <span class="option-card-text">
+                    <strong>Consumidor Final</strong>
+                    <small>Venta de mostrador, sin registrar datos</small>
+                  </span>
+                </label>
+                <label class="option-card">
+                  <input type="radio" name="modo_cliente" value="con_datos">
+                  <span class="option-card-icon"><i data-lucide="user-check"></i></span>
+                  <span class="option-card-text">
+                    <strong>Cliente con datos</strong>
+                    <small>Buscar uno existente o registrar uno nuevo</small>
+                  </span>
+                </label>
+              </div>
+              <div class="form-text" id="modo-cliente-hint">Venta de mostrador sin cliente registrado — siempre al contado, sin envío de PDF por correo.</div>
             </div>
-            <div class="d-flex justify-content-between mb-2">
-              <span>IVA (15%):</span>
-              <span id="summary-tax" class="fw-bold">$0.00</span>
+
+            <div class="mb-3 d-none-force" id="customer-select-wrapper">
+              <label class="form-label">Filtrar por tipo de identificación</label>
+              <div class="choice-group mb-3" id="tipo-id-filtro">
+                <label class="choice-option is-checked">
+                  <input type="radio" name="tipo_id_filtro" value="todos" checked>Todos
+                </label>
+                <label class="choice-option">
+                  <input type="radio" name="tipo_id_filtro" value="cedula">Cédula
+                </label>
+                <label class="choice-option">
+                  <input type="radio" name="tipo_id_filtro" value="ruc">RUC
+                </label>
+                <label class="choice-option">
+                  <input type="radio" name="tipo_id_filtro" value="pasaporte">Pasaporte
+                </label>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Buscar o seleccionar cliente</label>
+                <button type="button" class="btn btn-success btn-sm" id="quick-customer-btn"><i data-lucide="user-plus"></i>Nuevo cliente</button>
+              </div>
+              {{ form.customer }}
+              {% for error in form.customer.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
             </div>
-            <hr>
-            <div class="d-flex justify-content-between fs-5">
-              <span class="fw-bold">Total:</span>
-              <span id="summary-total" class="fw-bold text-success">$0.00</span>
+            <div id="customer-info" class="p-3 info-panel d-none-force">
+              <p class="fw-bold text-muted small mb-2">Datos del Cliente</p>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Identificación (DNI/RUC)</label>
+                  <input type="text" id="c-dni" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Nombres</label>
+                  <input type="text" id="c-first" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Apellidos</label>
+                  <input type="text" id="c-last" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Correo Electrónico</label>
+                  <input type="text" id="c-email" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Teléfono/Celular</label>
+                  <input type="text" id="c-phone" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Dirección</label>
+                  <input type="text" id="c-address" class="form-control form-control-sm" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-small text-muted">Crédito Disponible</label>
+                  <input type="text" id="c-credito" class="form-control form-control-sm fw-bold" readonly>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        <div class="d-flex justify-content-end gap-2 wizard-step-footer">
+          <a href="{% url 'billing:invoice_list' %}" class="btn btn-secondary">Cancelar</a>
+          <button type="button" class="btn btn-primary" data-wizard-next="2">Siguiente<i data-lucide="arrow-right"></i></button>
+        </div>
       </div>
 
-      <div class="d-flex justify-content-end gap-2">
-        <a href="{% url 'billing:invoice_list' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
-        <button type="submit" class="btn btn-warning px-4 fw-bold">Guardar Factura</button>
+      <!-- PASO 2: DETALLES -->
+      <div class="wizard-step d-none-force" data-step="2">
+        <div class="card mb-4">
+          <div class="card-header card-header-muted">
+            <span>Detalles de la Factura</span>
+            <button type="button" class="btn btn-success btn-sm" id="add-row"><i data-lucide="circle-plus"></i>Agregar Producto</button>
+          </div>
+          <div class="card-body card-body-no-bottom">
+            <label class="form-label text-small text-muted icon-text">
+              <i data-lucide="scan-barcode" class="icon-xs"></i>Búsqueda rápida / escáner de código de barras
+            </label>
+            <input type="text" id="quick-search" class="form-control mb-3" autocomplete="off"
+                   placeholder="Escanea el código de barras o escribe el nombre del producto y presiona Enter...">
+          </div>
+          <div class="table-modern-wrap">
+            <table class="table-modern" id="details-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th class="w-100">Cantidad</th>
+                  <th class="w-150">Precio Unitario ($)</th>
+                  <th class="w-120">Subtotal</th>
+                  <th class="w-60">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody id="formset-body">
+                {% for detail_form in formset %}
+                <tr class="detail-row">
+                  <td>
+                    {{ detail_form.id }}
+                    <div class="d-flex align-items-center gap-2">
+                      <img class="img-thumb-sm product-thumb d-none-force" src="" alt="">
+                      <div class="flex-grow-1">
+                        <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
+                          <option value="">Buscar producto...</option>
+                          {% for p in detail_form.product.field.queryset %}
+                            <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                          {% endfor %}
+                        </select>
+                        <small class="text-muted stock-info d-block"></small>
+                        <small class="text-muted product-meta d-block"></small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <input type="number" name="{{ detail_form.quantity.html_name }}" class="form-control quantity-input" value="{{ detail_form.quantity.value|default:1 }}" min="1">
+                  </td>
+                  <td>
+                    <input type="number" name="{{ detail_form.unit_price.html_name }}" class="form-control price-input" value="{{ detail_form.unit_price.value|default:'' }}" step="0.01" readonly>
+                  </td>
+                  <td class="text-end fw-bold subtotal-cell">$0.00</td>
+                  <td class="text-center">
+                    <button type="button" class="btn btn-danger btn-sm btn-icon-only remove-row">✕</button>
+                    {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end mb-4">
+          <div class="card card-summary">
+            <div class="card-body">
+              <div class="d-flex justify-content-between mb-2">
+                <span>Subtotal:</span>
+                <span id="summary-subtotal" class="fw-bold">$0.00</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span id="summary-tax-label">IVA:</span>
+                <span id="summary-tax" class="fw-bold">$0.00</span>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between fs-5">
+                <span class="fw-bold">Total:</span>
+                <span id="summary-total" class="fw-bold text-success">$0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between gap-2 wizard-step-footer">
+          <button type="button" class="btn btn-secondary" data-wizard-back="1"><i data-lucide="arrow-left"></i>Atrás</button>
+          <button type="button" class="btn btn-primary" data-wizard-next="3">Siguiente<i data-lucide="arrow-right"></i></button>
+        </div>
+      </div>
+
+      <!-- PASO 3: FACTURACIÓN -->
+      <div class="wizard-step d-none-force" data-step="3">
+        <div class="card mb-4">
+          <div class="card-header card-header-muted">Forma de Pago</div>
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3 p-3 info-panel">
+              <span class="fw-bold">Total a pagar</span>
+              <span id="step3-total-recap" class="fw-bold text-success fs-5">$0.00</span>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tipo de Pago</label>
+              {{ form.tipo_pago }}
+              {% for error in form.tipo_pago.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="mb-3 {% if form.tipo_pago.value == 'credito' %}d-none-force{% endif %}" id="forma-pago-wrapper">
+              <label class="form-label">Forma de Pago</label>
+              {{ form.forma_pago }}
+              <div class="form-text">Efectivo y tarjeta exigen tener una caja abierta.</div>
+              {% for error in form.forma_pago.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="mb-3 {% if not form.monto_recibido.errors %}d-none-force{% endif %}" id="monto-recibido-wrapper">
+              <label class="form-label">Monto recibido del cliente</label>
+              {{ form.monto_recibido }}
+              <div class="form-text">Se pide al tocar "Guardar Factura" si la forma de pago es efectivo.</div>
+              {% for error in form.monto_recibido.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="mb-3 {% if not form.tarjeta_titular.errors and not form.tarjeta_cvv.errors and not form.tarjeta_expiracion.errors %}d-none-force{% endif %}" id="tarjeta-wrapper">
+              <div class="row g-4">
+                <div class="col-md-6">
+                  <label class="form-label">Número de tarjeta</label>
+                  {% comment %}
+                    Solo visual: sin atributo "name", nunca se envía al servidor.
+                    Alimenta la animación de la derecha y detecta la marca
+                    (Visa/Mastercard/Amex/etc.) por su prefijo. Lo único que sí
+                    se guarda son los últimos 4 dígitos, más abajo.
+                  {% endcomment %}
+                  <input type="text" id="cc-number-input" class="form-control" inputmode="numeric"
+                         autocomplete="off" maxlength="23" placeholder="•••• •••• •••• ••••">
+                  <div class="cc-brand-hint" id="cc-brand-hint"></div>
+
+                  <label class="form-label mt-3">Titular de la tarjeta</label>
+                  {{ form.tarjeta_titular }}
+                  {% for error in form.tarjeta_titular.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+
+                  <div class="row g-2 mt-1">
+                    <div class="col-md-6">
+                      <label class="form-label">CVV/CVC</label>
+                      {{ form.tarjeta_cvv }}
+                      {% for error in form.tarjeta_cvv.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                      {% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Fecha de expiración</label>
+                      {{ form.tarjeta_expiracion }}
+                      {% for error in form.tarjeta_expiracion.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div class="info-box mt-2">Pago informativo — no se procesa ninguna tarjeta real, solo se registra que el cobro se hizo por un datáfono externo.</div>
+                  <div class="d-flex align-items-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary" id="tarjeta-pagar-btn"><i data-lucide="lock"></i>Pagar</button>
+                    <span class="badge badge-warning" id="tarjeta-pago-estado">Pago pendiente</span>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="cc-wrapper">
+                    <div class="cc-flip-card" id="cc-flip-card">
+                      <div class="cc-flip-card-inner">
+                        <div class="cc-flip-card-front">
+                          <span class="cc-heading">TARJETA<span class="cc-heading-brand" id="cc-heading-brand"></span></span>
+                          <div class="cc-chip"></div>
+                          <span class="cc-contactless"></span>
+                          <div class="cc-number" id="cc-display-number">•••• •••• •••• ••••</div>
+                          <div class="cc-sub-row">
+                            <span class="cc-name" id="cc-display-name">NOMBRE DEL TITULAR</span>
+                            <span class="cc-expiry-block">VÁLIDO HASTA<br><span class="cc-expiry-value" id="cc-display-expiry">MM/AA</span></span>
+                          </div>
+                          <div class="cc-logo" id="cc-logo">
+                            <span class="cc-logo-visa">VISA</span>
+                            <span class="cc-logo-mastercard">
+                              <svg viewBox="0 0 48 48" width="36" height="22">
+                                <path fill="#ff9800" d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"></path>
+                                <path fill="#d50000" d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"></path>
+                                <path fill="#ff3d00" d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"></path>
+                              </svg>
+                            </span>
+                            <span class="cc-logo-amex">AMEX</span>
+                            <span class="cc-logo-discover">DISCOVER</span>
+                            <span class="cc-logo-diners">DINERS</span>
+                            <span class="cc-logo-jcb">JCB</span>
+                            <span class="cc-logo-generic">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                            </span>
+                          </div>
+                        </div>
+                        <div class="cc-flip-card-back">
+                          <div class="cc-strip"></div>
+                          <div class="cc-strip-row">
+                            <div class="cc-mstrip"></div>
+                            <div class="cc-sstrip"><span class="cc-code" id="cc-display-cvv">•••</span></div>
+                          </div>
+                          <div class="cc-back-hint">Pago informativo — sin procesamiento real</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mb-3 d-none-force" id="paypal-wrapper">
+              <div class="row g-4">
+                <div class="col-md-6">
+                  <div class="info-box">
+                    Al tocar "Pagar con PayPal" se crea la orden en PayPal de verdad y saldrás a
+                    <strong>paypal.com</strong> a completar el pago en su sitio real. La factura recién se
+                    genera cuando PayPal confirma que el pago fue capturado — si cancelás o cerrás el
+                    checkout, no queda ninguna factura creada.
+                  </div>
+                  <div class="d-flex align-items-center gap-2 mt-3">
+                    <button type="submit" class="btn btn-primary" id="paypal-pagar-btn"><i data-lucide="lock"></i>Pagar con PayPal</button>
+                    <span class="badge badge-info">Redirige a paypal.com</span>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="cc-wrapper">
+                    <div class="paypal-panel">
+                      <span class="paypal-panel-heading">PAGO CON</span>
+                      <div class="paypal-panel-logo">
+                        <span class="paypal-panel-logo-pay">Pay</span><span class="paypal-panel-logo-pal">Pal</span>
+                      </div>
+                      <div class="paypal-panel-total-label">Total a pagar</div>
+                      <div class="paypal-panel-total" id="paypal-panel-total">$0.00</div>
+                      <div class="paypal-panel-hint">Serás redirigido al checkout real de PayPal</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mb-3 {% if form.tipo_pago.value != 'credito' %}d-none-force{% endif %}" id="meses-credito-wrapper">
+              <label class="form-label">¿A cuántos meses se difiere?</label>
+              {{ form.meses_credito }}
+              <div class="form-text">Define el interés y la cuota mínima mensual del cliente.</div>
+              {% for error in form.meses_credito.errors %}
+                <div class="text-danger small">{{ error }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between gap-2 wizard-step-footer">
+          <button type="button" class="btn btn-secondary" data-wizard-back="2"><i data-lucide="arrow-left"></i>Atrás</button>
+          <button type="submit" class="btn btn-warning" id="guardar-factura-btn">Guardar Factura</button>
+        </div>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Cartel de pago en efectivo: se muestra recién al tocar "Guardar Factura"
+     cuando la forma de pago es efectivo — acá se pregunta cuánto entregó el
+     cliente y se calcula el cambio (o cuánto falta, si da de menos). Estilo
+     "cajero": pantalla tipo POS + botones de billetes, pero la lógica de
+     validación es la misma de siempre (ver actualizarFeedbackModal() en
+     invoice-wizard.js). -->
+<div class="modal fade" id="montoRecibidoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="banknote" class="icon-md icon-success"></i>Caja — Pago en Efectivo</h5>
+      </div>
+      <div class="modal-body">
+        <div class="cajero-display">
+          <div class="cajero-display-row">
+            <span class="cajero-display-label">Total a pagar</span>
+            <span id="modal-total" class="cajero-display-value">$0.00</span>
+          </div>
+          <div class="cajero-display-row">
+            <span class="cajero-display-label">Recibido</span>
+            <span id="cajero-recibido-display" class="cajero-display-value">$0.00</span>
+          </div>
+          <div class="cajero-display-divider"></div>
+          <div class="cajero-display-row cajero-display-cambio">
+            <span class="cajero-display-label" id="cajero-cambio-label">Cambio a devolver</span>
+            <span id="cajero-cambio-display" class="cajero-display-value">$0.00</span>
+          </div>
+        </div>
+
+        <label class="form-label mt-3">¿Cuánto dinero te entregó el cliente?</label>
+        <input type="number" id="modal-monto-input" class="form-control" step="0.01" min="0" placeholder="Ej: 50.00" autofocus>
+
+        <div class="cajero-billetes mt-3">
+          <button type="button" class="cajero-billete" data-monto="1">$1</button>
+          <button type="button" class="cajero-billete" data-monto="5">$5</button>
+          <button type="button" class="cajero-billete" data-monto="10">$10</button>
+          <button type="button" class="cajero-billete" data-monto="20">$20</button>
+          <button type="button" class="cajero-billete" data-monto="50">$50</button>
+          <button type="button" class="cajero-billete" data-monto="100">$100</button>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+          <button type="button" class="btn btn-secondary btn-sm flex-grow-1" id="cajero-exacto">Monto exacto</button>
+          <button type="button" class="btn btn-secondary btn-sm flex-grow-1" id="cajero-limpiar">Limpiar</button>
+        </div>
+
+        <div id="modal-feedback" class="mt-2 small"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modal-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="modal-confirmar">Confirmar y Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pasarela de pago simulada: se muestra recién al tocar "Guardar Factura"
+     cuando la forma de pago es tarjeta — imita el paso de "pagar" de un
+     checkout real (procesando -> aprobado) antes de guardar la factura,
+     pero es 100% simulado: no hay ninguna pasarela externa integrada, ver
+     el info-box de abajo y el de "tarjeta-wrapper" más arriba. -->
+<div class="modal fade" id="pasarelaPagoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="credit-card" class="icon-md icon-primary"></i>Pasarela de Pago</h5>
+      </div>
+      <div class="modal-body">
+        <div id="pasarela-resumen">
+          <p class="mb-2">Total a cobrar: <span id="pasarela-total" class="fw-bold">$0.00</span></p>
+          <p class="mb-1 text-muted small">Tarjeta: <span id="pasarela-numero">•••• •••• •••• ••••</span></p>
+          <p class="mb-0 text-muted small">Titular: <span id="pasarela-titular">-</span></p>
+          <div id="pasarela-error" class="mt-2 small text-danger fw-bold d-none-force"></div>
+        </div>
+        <div id="pasarela-procesando" class="d-none-force text-center py-3">
+          <i data-lucide="loader-2" class="icon-lg icon-primary spin"></i>
+          <p class="mt-2 mb-0 fw-bold">Procesando pago...</p>
+          <p class="text-muted small mb-0">No cierres ni recargues esta ventana.</p>
+        </div>
+        <div id="pasarela-aprobado" class="d-none-force text-center py-3">
+          <i data-lucide="check-circle" class="icon-lg icon-success"></i>
+          <p class="mt-2 mb-0 fw-bold text-success">Pago Aprobado</p>
+          <p class="text-muted small mb-0">Guardando la factura...</p>
+        </div>
+        <div class="info-box mt-3">Simulación — no se procesa ningún cobro real, ninguna pasarela externa está integrada.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="pasarela-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="pasarela-pagar"><i data-lucide="lock"></i>Pagar ahora</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cartel de "redirigiendo a PayPal": a diferencia del de arriba, esto NO
+     es una simulación — al tocar "Pagar con PayPal" el <form> se envía de
+     verdad (mismo submit de siempre) y el servidor crea una orden real vía
+     la API de PayPal antes de redirigir al checkout real en paypal.com (ver
+     billing/views.py -> invoice_create, rama Invoice.PAYPAL). Este modal
+     solo da feedback visual mientras esa llamada real está en curso; no
+     intercepta ni frena el submit. -->
+<div class="modal fade" id="paypalRedirigiendoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-body text-center py-4">
+        <i data-lucide="loader-2" class="icon-lg icon-primary spin"></i>
+        <p class="mt-2 mb-0 fw-bold">Conectando con PayPal...</p>
+        <p class="text-muted small mb-0">No cierres ni recargues esta ventana — en un momento serás redirigido a paypal.com.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alta rápida de cliente: crea un Customer por AJAX sin salir del wizard
+     (ver billing/views.py -> customer_quick_create). El cliente nuevo queda
+     seleccionado en el paso 1 sin recargar la página. -->
+<div class="modal fade" id="quickCustomerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="user-plus" class="icon-md icon-success"></i>Nuevo Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="quick-customer-feedback" class="alert alert-danger d-none-force"></div>
+        <div class="mb-3">
+          <label class="form-label">Tipo de identificación</label>
+          <div class="choice-group" id="qc-tipo-identificacion">
+            <label class="choice-option is-checked">
+              <input type="radio" name="qc_tipo_identificacion" value="cedula" checked>Cédula
+            </label>
+            <label class="choice-option">
+              <input type="radio" name="qc_tipo_identificacion" value="ruc">RUC
+            </label>
+            <label class="choice-option">
+              <input type="radio" name="qc_tipo_identificacion" value="pasaporte">Pasaporte
+            </label>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label" id="qc-dni-label">Cédula (10 dígitos)</label>
+            <input type="text" id="qc-dni" name="dni" class="form-control" inputmode="numeric" maxlength="10">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Correo Electrónico</label>
+            <input type="email" id="qc-email" name="email" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Nombres</label>
+            <input type="text" id="qc-first-name" name="first_name" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Apellidos</label>
+            <input type="text" id="qc-last-name" name="last_name" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono/Celular</label>
+            <input type="text" id="qc-phone" name="phone" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Dirección</label>
+            <input type="text" id="qc-address" name="address" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="quick-customer-save">Crear y Seleccionar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -149,108 +588,14 @@
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-const PRODUCTS = {{ products_json|safe }};
-const CUSTOMERS = {{ customers_json|safe }};
-let formIndex = {{ formset.total_form_count }};
-
-// Cliente
-document.getElementById('id_customer').addEventListener('change', function() {
-  const cid = this.value;
-  const info = document.getElementById('customer-info');
-  if (cid && CUSTOMERS[cid]) {
-    const c = CUSTOMERS[cid];
-    document.getElementById('c-dni').value = c.dni;
-    document.getElementById('c-first').value = c.first_name;
-    document.getElementById('c-last').value = c.last_name;
-    document.getElementById('c-email').value = c.email;
-    document.getElementById('c-phone').value = c.phone;
-    document.getElementById('c-address').value = c.address;
-    info.style.display = 'block';
-  } else {
-    info.style.display = 'none';
-  }
-});
-
-function calcRow(row) {
-  const qty = parseFloat(row.querySelector('.quantity-input').value) || 0;
-  const price = parseFloat(row.querySelector('.price-input').value) || 0;
-  const sub = qty * price;
-  row.querySelector('.subtotal-cell').textContent = '$' + sub.toFixed(2);
-  return sub;
-}
-
-function calcTotals() {
-  let subtotal = 0;
-  document.querySelectorAll('.detail-row').forEach(row => {
-    subtotal += calcRow(row);
-  });
-  const tax = subtotal * 0.15;
-  const total = subtotal + tax;
-  document.getElementById('summary-subtotal').textContent = '$' + subtotal.toFixed(2);
-  document.getElementById('summary-tax').textContent = '$' + tax.toFixed(2);
-  document.getElementById('summary-total').textContent = '$' + total.toFixed(2);
-}
-
-function initSelect2(sel) {
-  $(sel).select2({
-    placeholder: 'Escribe para buscar producto...',
-    allowClear: true,
-    width: '100%'
-  }).on('change', function() {
-    const pid = $(this).val();
-    const row = $(this).closest('tr')[0];
-    const priceInput = row.querySelector('.price-input');
-    const stockInfo = row.querySelector('.stock-info');
-    if (pid && PRODUCTS[pid]) {
-      priceInput.value = PRODUCTS[pid].price.toFixed(2);
-      stockInfo.textContent = 'Stock disponible: ' + PRODUCTS[pid].stock;
-    } else {
-      priceInput.value = '';
-      stockInfo.textContent = '';
-    }
-    calcTotals();
-  });
-}
-
-function bindProductSelect(row) {
-  const sel = row.querySelector('.product-select');
-  initSelect2(sel);
-
-  row.querySelector('.quantity-input').addEventListener('input', function() {
-    if (this.value < 1 || this.value === '') this.value = 1;
-    calcTotals();
-  });
-
-  row.querySelector('.remove-row').addEventListener('click', function() {
-    row.remove();
-    calcTotals();
-  });
-}
-
-document.querySelectorAll('.detail-row').forEach(row => bindProductSelect(row));
-calcTotals();
-
-document.getElementById('add-row').addEventListener('click', function() {
-  const tbody = document.getElementById('formset-body');
-  const row = document.createElement('tr');
-  row.className = 'detail-row';
-  row.innerHTML = `
-    <td>
-      <input type="hidden" name="details-${formIndex}-id" value="">
-      <select name="details-${formIndex}-product" class="form-select product-select">
-        <option value="">Escribe para buscar producto...</option>
-        ${Object.entries(PRODUCTS).map(([id,p]) => `<option value="${id}">${p.name}</option>`).join('')}
-      </select>
-      <small class="text-muted stock-info"></small>
-    </td>
-    <td><input type="number" name="details-${formIndex}-quantity" class="form-control quantity-input" value="1" min="1"></td>
-    <td><input type="number" name="details-${formIndex}-unit_price" class="form-control price-input bg-light" step="0.01" readonly></td>
-    <td class="text-end fw-bold subtotal-cell align-middle">$0.00</td>
-    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger remove-row">✕</button></td>
-  `;
-  tbody.appendChild(row);
-  bindProductSelect(row);
-  document.getElementById('id_details-TOTAL_FORMS').value = ++formIndex;
-});
+window.INVOICE_WIZARD_DATA = {
+  products: {{ products_json|safe }},
+  customers: {{ customers_json|safe }},
+  ivaFraccion: {{ iva_fraccion_json|safe }},
+  formIndex: {{ formset.total_form_count }},
+  consumidorFinalId: '{{ form.consumidor_final.id_for_label }}',
+  quickCreateUrl: '{% url "billing:customer_quick_create" %}',
+};
 </script>
+<script src="{% static 'js/invoice-wizard.js' %}"></script>
 {% endblock %}

@@ -4,3 +4,8 @@ __pycache__/
 *.sqlite3
 media/products/
 .env
+
+# Certificado de firma electrónica (SRI) — clave privada real, nunca al repo.
+*.p12
+*.pfx
+facturacion_electronica/certificados/

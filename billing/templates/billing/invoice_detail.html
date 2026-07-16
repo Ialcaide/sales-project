@@ -3,46 +3,16 @@
 {% load security_tags %}
 {% block title %}Factura #{{ invoice.id }}{% endblock %}
 {% block content %}
-<style>
-.factura-wrapper { background:#fff; border-radius:20px; box-shadow:0 4px 40px rgba(78,84,200,0.10); padding:48px; max-width:860px; margin:0 auto; }
-.factura-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:32px; padding-bottom:24px; border-bottom:2px solid #f1f5f9; }
-.factura-empresa h2 { font-size:1.6rem; font-weight:800; color:#4e54c8; margin:0; }
-.factura-empresa p { font-size:0.85rem; color:#94a3b8; margin:0; }
-.factura-numero { text-align:right; }
-.factura-numero .num { font-size:1.8rem; font-weight:800; color:#4e54c8; }
-.factura-numero .fecha { font-size:0.85rem; color:#94a3b8; }
-.factura-info { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
-.info-box { background:#f8fafc; border-radius:14px; padding:20px 24px; border:1.5px solid #f1f5f9; }
-.info-box h6 { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#94a3b8; margin-bottom:12px; }
-.info-box p { font-size:0.92rem; color:#334155; margin:4px 0; }
-.info-box strong { color:#1e293b; }
-.factura-table { width:100%; border-collapse:collapse; margin-bottom:24px; }
-.factura-table thead tr { background:linear-gradient(135deg,#4e54c8,#8f94fb); }
-.factura-table thead th { color:white; padding:12px 16px; font-size:0.82rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
-.factura-table thead th:last-child { text-align:right; }
-.factura-table thead th:nth-child(2), .factura-table thead th:nth-child(3) { text-align:center; }
-.factura-table tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.15s; }
-.factura-table tbody tr:hover { background:#f8fafc; }
-.factura-table tbody td { padding:14px 16px; font-size:0.92rem; color:#334155; }
-.factura-table tbody td:nth-child(2) { text-align:center; }
-.factura-table tbody td:nth-child(3), .factura-table tbody td:nth-child(4) { text-align:right; }
-.factura-totales { display:flex; justify-content:flex-end; }
-.totales-box { min-width:280px; }
-.totales-row { display:flex; justify-content:space-between; padding:8px 0; font-size:0.92rem; color:#475569; border-bottom:1px solid #f1f5f9; }
-.totales-row.total { font-size:1.15rem; font-weight:800; color:#4e54c8; border-bottom:none; padding-top:12px; }
-.factura-footer { margin-top:32px; padding-top:20px; border-top:2px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; }
-.factura-footer p { font-size:0.82rem; color:#94a3b8; margin:0; }
-</style>
 
 <div class="factura-wrapper" id="factura-contenido">
   <div class="factura-header">
     <div class="factura-empresa">
-      <h2><i class="bi bi-speedometer2 me-2"></i>TecnoStock S.A.</h2>
+      <h2><i data-lucide="gauge" class="icon-lg"></i>TecnoStock S.A.</h2>
       <p>Sistema de Gestión de Ventas y Facturación</p>
       <p>UNEMI © 2026</p>
     </div>
     <div class="factura-numero">
-      <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#94a3b8;">Factura</div>
+      <div class="num-label">Factura</div>
       <div class="num">#{{ invoice.id|stringformat:"04d" }}</div>
       <div class="fecha">{{ invoice.invoice_date|date:"d/m/Y H:i" }}</div>
     </div>
@@ -61,24 +31,76 @@
       <p><strong>N° Factura:</strong> {{ invoice.id|stringformat:"04d" }}</p>
       <p><strong>Fecha:</strong> {{ invoice.invoice_date|date:"d/m/Y" }}</p>
       <p><strong>Hora:</strong> {{ invoice.invoice_date|date:"H:i" }}</p>
-      <p><strong>Estado:</strong>
-        {% if invoice.is_active %}
-          <span class="badge bg-success">Activa</span>
+      <p><strong>Tipo de Pago:</strong> {{ invoice.get_tipo_pago_display }}
+        {% if invoice.tipo_pago == 'credito' and invoice.meses_credito %}(a {{ invoice.meses_credito }} mes{{ invoice.meses_credito|pluralize:"es" }}){% endif %}
+      </p>
+      {% if invoice.tipo_pago == 'credito' %}
+      <p><strong>Saldo Pendiente:</strong> ${{ invoice.saldo }}</p>
+      {% if invoice.meses_credito %}
+      <p><strong>Fecha límite de pago:</strong> {{ invoice.fecha_limite_pago|date:"d/m/Y" }}</p>
+      <p><strong>Cuota mínima mensual:</strong> ${{ invoice.cuota_minima }}</p>
+      {% endif %}
+      <p><strong>Estado de Cobro:</strong>
+        {% if invoice.estado == 'pagada' %}
+          <span class="badge badge-success">Pagada</span>
         {% else %}
-          <span class="badge bg-danger">Inactiva</span>
+          <span class="badge badge-warning">Pendiente</span>
         {% endif %}
       </p>
+      {% endif %}
+      <p><strong>Estado:</strong>
+        {% if invoice.is_active %}
+          <span class="badge badge-success">Activa</span>
+        {% else %}
+          <span class="badge badge-error">Inactiva (Anulada)</span>
+        {% endif %}
+      </p>
+      {% if perms.facturacion_electronica.view_comprobanteelectronico %}
+        {% with comprobante=invoice.comprobante_electronico %}
+        <hr>
+        <p><strong>Estado SRI:</strong>
+          {% if comprobante %}
+            {% if comprobante.estado == 'autorizado' %}
+              <span class="badge badge-success">{{ comprobante.get_estado_display }}</span>
+            {% elif comprobante.estado == 'no_autorizado' or comprobante.estado == 'error' or comprobante.estado == 'devuelta' %}
+              <span class="badge badge-error">{{ comprobante.get_estado_display }}</span>
+            {% elif comprobante.estado == 'generado' or comprobante.estado == 'firmado' %}
+              <span class="badge badge-neutral">{{ comprobante.get_estado_display }}</span>
+            {% else %}
+              <span class="badge badge-warning">{{ comprobante.get_estado_display }}</span>
+            {% endif %}
+          {% else %}
+            <span class="badge badge-neutral">Sin generar</span>
+          {% endif %}
+        </p>
+        {% if comprobante %}
+          <p class="mb-1">
+            <strong>Clave de acceso:</strong>
+            <span class="small">{{ comprobante.clave_acceso }}</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm btn-icon-only ms-1" id="copiar-clave-acceso" title="Copiar clave de acceso" data-clave="{{ comprobante.clave_acceso }}">
+              <i data-lucide="copy" class="icon-xs"></i>
+            </button>
+          </p>
+          {% if comprobante.numero_autorizacion %}
+            <p><strong>N° Autorización:</strong> {{ comprobante.numero_autorizacion }}</p>
+          {% endif %}
+          {% if comprobante.mensajes %}
+            <p class="small text-danger mb-0">{{ comprobante.mensajes|last }}</p>
+          {% endif %}
+          {% if comprobante.ambiente != comprobante.AMBIENTE_PRODUCCION %}
+            <p class="form-text mb-0">La consulta pública del SRI solo indexa comprobantes de ambiente Producción — usa "Descargar RIDE" para ver este.</p>
+          {% endif %}
+        {% else %}
+          <p class="text-muted small mb-0">Todavía no se generó un comprobante electrónico para esta factura.</p>
+        {% endif %}
+        {% endwith %}
+      {% endif %}
     </div>
   </div>
 
   <table class="factura-table">
     <thead>
-      <tr>
-        <th>Producto</th>
-        <th>Cantidad</th>
-        <th>Precio Unitario</th>
-        <th>Subtotal</th>
-      </tr>
+      <tr><th>Producto</th><th>Cantidad</th><th>Precio Unitario</th><th>Subtotal</th></tr>
     </thead>
     <tbody>
       {% for detail in invoice.details.all %}
@@ -94,39 +116,131 @@
 
   <div class="factura-totales">
     <div class="totales-box">
-      <div class="totales-row">
-        <span>Subtotal</span>
-        <span>${{ invoice.subtotal }}</span>
-      </div>
-      <div class="totales-row">
-        <span>IVA (15%)</span>
-        <span>${{ invoice.tax }}</span>
-      </div>
-      <div class="totales-row total">
-        <span>TOTAL</span>
-        <span>${{ invoice.total }}</span>
-      </div>
+      <div class="totales-row"><span>Subtotal</span><span>${{ invoice.subtotal }}</span></div>
+      <div class="totales-row"><span>IVA (15%)</span><span>${{ invoice.tax }}</span></div>
+      <div class="totales-row total"><span>TOTAL</span><span>${{ invoice.total }}</span></div>
+      {% if invoice.forma_pago == 'efectivo' and invoice.monto_recibido is not None %}
+      <div class="totales-row"><span>Monto Recibido</span><span>${{ invoice.monto_recibido }}</span></div>
+      <div class="totales-row"><span>Cambio</span><span class="fw-bold text-success">${{ invoice.cambio }}</span></div>
+      {% endif %}
+      {% if invoice.forma_pago == 'tarjeta' %}
+      {% comment %}
+        El CVV/CVC nunca se vuelve a mostrar acá, aunque sí se guarda —
+        mostrarlo otra vez sería exponer un dato que ningún comprobante
+        real revela después del cobro.
+      {% endcomment %}
+      <div class="totales-row"><span>Titular</span><span>{{ invoice.tarjeta_titular|default:"-" }}</span></div>
+      <div class="totales-row"><span>Expiración</span><span>{{ invoice.tarjeta_expiracion|date:"m/Y"|default:"-" }}</span></div>
+      {% endif %}
+      {% if invoice.tipo_pago == 'credito' and invoice.meses_credito %}
+      <div class="totales-row"><span>Interés ({{ invoice.meses_credito }} mes{{ invoice.meses_credito|pluralize:"es" }})</span><span>${{ invoice.interes }}</span></div>
+      <div class="totales-row"><span>Total a Pagar</span><span>${{ invoice.total_a_pagar }}</span></div>
+      {% endif %}
+      {% if invoice.tipo_pago == 'credito' %}
+      <div class="totales-row"><span>Saldo Pendiente</span><span class="fw-bold text-danger">${{ invoice.saldo }}</span></div>
+      {% if invoice.meses_credito %}
+      <div class="totales-row"><span>Cuota Mínima Mensual</span><span class="fw-bold">${{ invoice.cuota_minima }}</span></div>
+      {% endif %}
+      {% endif %}
     </div>
   </div>
 
+  {% if invoice.tipo_pago == 'credito' %}
+  <div class="mt-4">
+    <h6 class="text-uppercase text-muted small fw-bold mb-2">Cobros Registrados</h6>
+    <table class="factura-table">
+      <thead><tr><th>Fecha</th><th>Valor</th><th>Observación</th></tr></thead>
+      <tbody>
+        {% for cobro in invoice.cobros.all %}
+        <tr>
+          <td>{{ cobro.fecha|date:"d/m/Y" }}</td>
+          <td>${{ cobro.valor }}</td>
+          <td>{{ cobro.observacion|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="text-center">Aún no se han registrado cobros</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="d-flex gap-2">
+      <a href="{% url 'cobros:cobro_list' %}?factura={{ invoice.pk }}" class="btn btn-secondary btn-sm"><i data-lucide="history"></i>Ver historial completo de esta factura</a>
+      {% if invoice.estado == 'pendiente' and invoice.is_active %}
+      <a href="{% url 'cobros:cobro_create' invoice.pk %}" class="btn btn-success btn-sm"><i data-lucide="coins"></i>Registrar Cobro</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="factura-footer">
-    <p><i class="bi bi-shield-check me-1"></i>Documento generado electrónicamente — TecnoStock S.A.</p>
+    <p class="icon-text"><i data-lucide="shield-check" class="icon-xs"></i>Documento generado electrónicamente — TecnoStock S.A.</p>
     <p>Gracias por su compra</p>
   </div>
 </div>
 
-<div class="d-flex gap-3 mt-4" style="max-width:860px; margin:0 auto;">
-  <a href="{% url 'billing:invoice_list' %}" class="btn btn-cancelar">
-    <i class="bi bi-arrow-left me-1"></i>Volver
-  </a>
-  <a href="{% url 'billing:invoice_pdf' invoice.pk %}" class="btn btn-guardar">
-    <i class="bi bi-file-earmark-pdf me-2"></i>Descargar PDF
-  </a>
-  {% if user|has_group:'Administrador' or user.is_superuser %}
-  <a href="{% url 'billing:invoice_delete' invoice.pk %}" class="btn btn-danger" style="border-radius:12px; padding:13px 20px; font-weight:600;">
-    <i class="bi bi-trash me-1"></i>Eliminar
-  </a>
+<div class="d-flex gap-2 flex-wrap mt-4 max-w-content">
+  <a href="{% url 'billing:invoice_list' %}" class="btn btn-cancelar"><i data-lucide="arrow-left"></i>Volver</a>
+  <a href="{% url 'billing:invoice_pdf' invoice.pk %}" class="btn btn-guardar"><i data-lucide="file-text"></i>Descargar PDF</a>
+  {% if perms.facturacion_electronica.view_comprobanteelectronico %}
+    {% with comprobante=invoice.comprobante_electronico %}
+      {% if comprobante %}
+        <a href="{% url 'facturacion_electronica:comprobante_ride_pdf' comprobante.pk %}" class="btn btn-secondary" target="_blank"><i data-lucide="file-text"></i>Descargar RIDE</a>
+        <a href="{% url 'facturacion_electronica:comprobante_xml_download' comprobante.pk %}" class="btn btn-secondary"><i data-lucide="file-code"></i>Descargar XML</a>
+        {% if comprobante.ambiente == comprobante.AMBIENTE_PRODUCCION %}
+          <a href="https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet/publico/validezComprobantes.jsf" class="btn btn-secondary" target="_blank" rel="noopener"><i data-lucide="external-link"></i>Consultar en el SRI</a>
+        {% endif %}
+        {% if comprobante.estado == 'enviado' or comprobante.estado == 'recibida' or comprobante.estado == 'en_proceso' %}
+          <a href="{% url 'facturacion_electronica:comprobante_consultar_autorizacion' comprobante.pk %}" class="btn btn-secondary"><i data-lucide="rotate-cw"></i>Consultar Autorización</a>
+        {% endif %}
+        {% if perms.facturacion_electronica.add_comprobanteelectronico %}
+          {% if comprobante.estado == 'error' or comprobante.estado == 'devuelta' or comprobante.estado == 'no_autorizado' %}
+            <a href="{% url 'facturacion_electronica:comprobante_reintentar' invoice.pk %}" class="btn btn-outline-danger"><i data-lucide="repeat"></i>Reintentar Generación</a>
+          {% endif %}
+        {% endif %}
+      {% elif perms.facturacion_electronica.add_comprobanteelectronico %}
+        <a href="{% url 'facturacion_electronica:comprobante_reintentar' invoice.pk %}" class="btn btn-outline-danger"><i data-lucide="repeat"></i>Generar Comprobante Electrónico</a>
+      {% endif %}
+    {% endwith %}
+  {% endif %}
+  {% if invoice.is_active and perms.billing.change_invoice %}
+  <a href="{% url 'billing:invoice_cancel' invoice.pk %}" class="btn btn-warning"><i data-lucide="circle-x"></i>Anular</a>
+  {% endif %}
+  {% if invoice.is_active and perms.devoluciones.add_devolucionventa %}
+  <a href="{% url 'devoluciones:devolucion_create' invoice.pk %}" class="btn btn-outline-danger"><i data-lucide="corner-down-left"></i>Devolución</a>
+  {% endif %}
+  {% if perms.billing.delete_invoice %}
+  <a href="{% url 'billing:invoice_delete' invoice.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Eliminar</a>
   {% endif %}
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* Botón "Copiar clave de acceso" junto al RIDE del SRI (ver el botón
+   "Consultar en el SRI", más arriba): el portal público del SRI no acepta
+   la clave por parámetro de URL (es una app JSF, exige pegarla a mano en su
+   formulario), así que lo más que se puede automatizar es copiarla al
+   portapapeles para que el usuario la pegue ahí en 2 clics. */
+(function () {
+  var btn = document.getElementById('copiar-clave-acceso');
+  if (!btn) return;
+  /* No se toca el ícono interno: lucide.createIcons() (ver static/js/icons.js)
+     ya reemplazó el <i data-lucide> original por un <svg> al cargar la
+     página, así que buscarlo de nuevo acá encontraría null. El feedback de
+     "copiado" se da con una clase CSS + el atributo title del botón. */
+  btn.addEventListener('click', function () {
+    navigator.clipboard.writeText(btn.dataset.clave).then(function () {
+      var tituloOriginal = btn.title;
+      btn.title = '¡Copiado!';
+      btn.classList.add('btn-outline-success');
+      btn.classList.remove('btn-outline-secondary');
+      setTimeout(function () {
+        btn.title = tituloOriginal;
+        btn.classList.remove('btn-outline-success');
+        btn.classList.add('btn-outline-secondary');
+      }, 1500);
+    });
+  });
+})();
+</script>
 {% endblock %}

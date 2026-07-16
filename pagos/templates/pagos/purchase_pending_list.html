@@ -1,0 +1,63 @@
+{% extends 'billing/base.html' %}
+{% block title %}Compras Pendientes{% endblock %}
+{% block breadcrumbs %}<span class="current">Compras Pendientes</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Compras Pendientes de Pago</h2>
+  <a href="{% url 'pagos:pago_list' %}" class="btn btn-secondary"><i data-lucide="history"></i>Historial de Pagos</a>
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="N° documento...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if query %}
+      <a href="{% url 'pagos:purchase_pending_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th>#</th><th>N° Compra</th><th>Proveedor</th><th>N° Documento</th><th>Fecha</th>
+          <th class="text-end">Total</th><th class="text-end">Saldo Pendiente</th><th class="text-end">Cuota Mínima</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="text-muted">{{ page_obj.start_index|add:forloop.counter0 }}</td>
+          <td>#{{ item.id|stringformat:"04d" }}</td>
+          <td>{{ item.supplier.name }}</td>
+          <td>{{ item.document_number }}</td>
+          <td>{{ item.purchase_date|date:"d/m/Y" }}</td>
+          <td class="text-end">${{ item.total }}</td>
+          <td class="text-end fw-bold text-danger">${{ item.saldo }}</td>
+          <td class="text-end fw-bold text-primary">${{ item.cuota_minima }}</td>
+          <td>
+            <div class="row-actions">
+              <a href="{% url 'pagos:pago_create' item.pk %}" class="row-action-btn icon-success" title="Registrar Pago"><i data-lucide="coins"></i></a>
+              {% if perms.purchasing.view_purchase %}
+                <a href="{% url 'purchasing:purchase_detail' item.pk %}" class="row-action-btn" title="Ver"><i data-lucide="eye"></i></a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="9">No hay compras pendientes de pago</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include 'partials/pagination.html' %}
+
+{% endblock %}

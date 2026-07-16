@@ -4,8 +4,8 @@
 <div class="row justify-content-center">
   <div class="col-md-7">
 
-    <div class="card shadow mb-4">
-      <div class="card-header bg-primary text-white"><h4 class="mb-0">Mis Datos</h4></div>
+    <div class="card mb-4">
+      <div class="card-header card-header-accent">Mis Datos</div>
       <div class="card-body">
         <p class="text-muted small">Usuario: <strong>{{ user.username }}</strong> (no se puede cambiar)</p>
         <form method="post">
@@ -16,8 +16,8 @@
       </div>
     </div>
 
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white"><h4 class="mb-0">Cambiar Contraseña</h4></div>
+    <div class="card">
+      <div class="card-header card-header-accent">Cambiar Contraseña</div>
       <div class="card-body">
         {% if not pending_code %}
           <p class="text-muted">
@@ -26,9 +26,7 @@
           </p>
           <form method="post" action="{% url 'security:password_change_request' %}">
             {% csrf_token %}
-            <button type="submit" class="btn btn-warning">
-              <i class="bi bi-envelope me-1"></i>Enviar código a mi correo
-            </button>
+            <button type="submit" class="btn btn-warning"><i data-lucide="mail"></i>Enviar código a mi correo</button>
           </form>
         {% else %}
           <p class="text-muted">
@@ -42,7 +40,7 @@
           </form>
           <form method="post" action="{% url 'security:password_change_request' %}" class="mt-2">
             {% csrf_token %}
-            <button type="submit" class="btn btn-link btn-sm p-0">¿No te llegó? Reenviar código</button>
+            <button type="submit" class="btn btn-ghost btn-sm">¿No te llegó? Reenviar código</button>
           </form>
         {% endif %}
       </div>

@@ -1,0 +1,46 @@
+{% extends 'billing/base.html' %}
+{% block title %}Registrar Movimiento{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card mb-4">
+      <div class="card-header card-header-accent">Registrar Movimiento — Caja #{{ sesion.id|stringformat:"04d" }}</div>
+      <div class="card-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Tipo</label>
+            {{ form.tipo }}
+            {% for error in form.tipo.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Monto</label>
+            {{ form.monto }}
+            {% for error in form.monto.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Concepto</label>
+            {{ form.concepto }}
+            {% for error in form.concepto.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'caja:caja_detalle' sesion.pk %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

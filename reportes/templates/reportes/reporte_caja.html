@@ -1,0 +1,89 @@
+{% extends 'billing/base.html' %}
+{% block title %}Reporte de Caja{% endblock %}
+{% block breadcrumbs %}<a href="{% url 'reportes:reporte_index' %}">Reportes</a> / <span class="current">Caja</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Reporte de Caja</h2>
+  <a href="{% url 'reportes:reporte_index' %}" class="btn btn-secondary">Volver</a>
+</div>
+
+{% include 'reportes/_filtro_periodo.html' %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card card-flush text-center">
+      <div class="card-body">
+        <div class="text-muted small">Ingresos</div>
+        <div class="fs-4 fw-bold text-success">${{ total_ingresos|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-flush text-center">
+      <div class="card-body">
+        <div class="text-muted small">Egresos</div>
+        <div class="fs-4 fw-bold text-danger">${{ total_egresos|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-flush text-center">
+      <div class="card-body">
+        <div class="text-muted small">Diferencia acumulada</div>
+        <div class="fs-4 fw-bold {% if total_diferencia < 0 %}text-danger{% elif total_diferencia > 0 %}text-warning{% endif %}">${{ total_diferencia|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header card-header-muted">Por Cajero</div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>Cajero</th><th class="text-end">Sesiones</th><th class="text-end">Diferencia acumulada</th></tr></thead>
+      <tbody>
+        {% for row in por_cajero %}
+        <tr>
+          <td>{{ row.usuario }}</td>
+          <td class="text-end">{{ row.sesiones }}</td>
+          <td class="text-end {% if row.diferencia_total < 0 %}text-danger{% elif row.diferencia_total > 0 %}text-warning{% endif %}">${{ row.diferencia_total|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="3">Sin datos</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header card-header-warning">Sesiones del período</div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead><tr><th>#</th><th>Cajero</th><th>Apertura</th><th>Cierre</th><th class="text-end">Ingresos</th><th class="text-end">Egresos</th><th class="text-end">Diferencia</th><th>Estado</th></tr></thead>
+      <tbody>
+        {% for s in sesiones %}
+        <tr>
+          <td>#{{ s.id }}</td>
+          <td>{{ s.usuario }}</td>
+          <td>{{ s.fecha_apertura|date:"d/m/Y H:i" }}</td>
+          <td>{{ s.fecha_cierre|date:"d/m/Y H:i"|default:"-" }}</td>
+          <td class="text-end">${{ s.total_ingresos }}</td>
+          <td class="text-end">${{ s.total_egresos }}</td>
+          <td class="text-end {% if s.diferencia and s.diferencia < 0 %}text-danger{% elif s.diferencia %}text-warning{% endif %}">
+            {% if s.diferencia != None %}${{ s.diferencia }}{% else %}-{% endif %}
+          </td>
+          <td>
+            {% if s.estado == 'abierta' %}<span class="badge badge-success">Abierta</span>{% else %}<span class="badge badge-neutral">Cerrada</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row"><td colspan="8">No hay sesiones en el período seleccionado</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -21,6 +21,7 @@ urlpatterns = [
     path('groups/<int:pk>/delete/', views.ProductGroupDeleteView.as_view(), name='productgroup_delete'),
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/create/', views.SupplierCreateView.as_view(), name='supplier_create'),
+    path('suppliers/quick-create/', views.supplier_quick_create, name='supplier_quick_create'),
     path('suppliers/<int:pk>/edit/', views.SupplierUpdateView.as_view(), name='supplier_update'),
     path('suppliers/<int:pk>/delete/', views.SupplierDeleteView.as_view(), name='supplier_delete'),
     path('suppliers/<int:pk>/', views.SupplierDetailView.as_view(), name='supplier_detail'),
@@ -29,8 +30,11 @@ urlpatterns = [
     path('products/<int:pk>/', views.ProductDetailView.as_view(), name='product_detail'),
     path('products/<int:pk>/edit/', views.ProductUpdateView.as_view(), name='product_update'),
     path('products/<int:pk>/delete/', views.ProductDeleteView.as_view(), name='product_delete'),
+    path('products/<int:pk>/barcode/', views.product_barcode_image, name='product_barcode_image'),
+    path('products/<int:pk>/barcode/print/', views.product_barcode_print, name='product_barcode_print'),
     path('customers/', views.customer_list, name='customer_list'),
     path('customers/create/', views.CustomerCreateView.as_view(), name='customer_create'),
+    path('customers/quick-create/', views.customer_quick_create, name='customer_quick_create'),
     path('customers/<int:pk>/edit/', views.CustomerUpdateView.as_view(), name='customer_update'),
     path('customers/<int:pk>/delete/', views.CustomerDeleteView.as_view(), name='customer_delete'),
     path('customers/<int:pk>/', views.CustomerDetailView.as_view(), name='customer_detail'),
@@ -38,6 +42,7 @@ urlpatterns = [
     path('invoices/create/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:pk>/', views.invoice_detail, name='invoice_detail'),
     path('invoices/<int:pk>/delete/', views.invoice_delete, name='invoice_delete'),
+    path('invoices/<int:pk>/cancel/', views.invoice_cancel, name='invoice_cancel'),
     # OJO: esta ruta '' está "tapada" por home.urls (config/urls.py incluye
     # home.urls ANTES que billing.urls, y ambas registran '' con name='home').
     # Django usa la primera que matchea, así que la raíz del sitio siempre

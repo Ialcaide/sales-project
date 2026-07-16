@@ -1,0 +1,42 @@
+/* ==========================================================================
+   BADGES
+   Etiquetas de estado en píldora (radio 999px), fondo/texto en tono suave
+   por color semántico. Incluye .dot, el indicador circular sólido usado en
+   la campanita de notificaciones (Lucide no tiene glifos de relleno).
+   ========================================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.badge svg { width: 12px; height: 12px; }
+.badge.badge-lg { font-size: var(--font-size-base); padding: 6px 14px; }
+
+.badge-success { background: var(--color-success-soft-bg); color: var(--color-success-soft-text); }
+.badge-warning { background: var(--color-warning-soft-bg); color: var(--color-warning-soft-text); }
+.badge-error, .badge-danger { background: var(--color-error-soft-bg); color: var(--color-error-soft-text); }
+.badge-info { background: var(--color-info-soft-bg); color: var(--color-info-soft-text); }
+.badge-primary { background: var(--color-primary-soft-bg); color: var(--color-primary-soft-text); }
+.badge-neutral { background: var(--color-neutral-soft-bg); color: var(--color-neutral-soft-text); }
+
+/* ---------- Dot (indicador circular sólido) ---------- */
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-success { background-color: var(--color-success); }
+.dot-warning { background-color: var(--color-warning); }
+.dot-error, .dot-danger { background-color: var(--color-error); }
+.dot-info { background-color: var(--color-info); }
+.dot-primary { background-color: var(--color-primary); }

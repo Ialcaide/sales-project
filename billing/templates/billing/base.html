@@ -3,93 +3,238 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+  /* Fija data-theme ANTES del primer paint para evitar el flash de tema
+     incorrecto — debe ser síncrono, por eso vive inline y no en un archivo
+     con defer (que se ejecutaría después de pintar). */
+  (function () {
+    var saved = localStorage.getItem('theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Sistema de Ventas{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'home/css/base.css' %}">
+  <title>{% block title %}TecnoStock S.A.{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  {# Solo grid + utilidades de Bootstrap (row/col/d-flex/gap/spacing/texto) #}
+  {# — CERO CSS de componentes de Bootstrap: todo btn/card/table/badge/modal #}
+  {# /dropdown/navbar es del design system propio, sin pelear especificidad. #}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap-grid.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap-utilities.min.css" rel="stylesheet">
+
+  {% comment %}
+  Design System — orden fijo: tokens primero (variables), dark-mode justo
+  después (redefine esas mismas variables bajo [data-theme="dark"]), luego
+  base y cada componente, y utilities.css AL FINAL — así una clase de
+  utilidad (ej. .icon-success sobre un ícono que ya tiene su propio color
+  por defecto en buttons.css) siempre puede ganar por orden de cascada,
+  sin necesitar !important salvo donde ya está documentado que hace falta.
+  {% endcomment %}
+  <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/dark-mode.css' %}">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
+  <link rel="stylesheet" href="{% static 'css/header.css' %}">
+  <link rel="stylesheet" href="{% static 'css/cards.css' %}">
+  <link rel="stylesheet" href="{% static 'css/buttons.css' %}">
+  <link rel="stylesheet" href="{% static 'css/badges.css' %}">
+  <link rel="stylesheet" href="{% static 'css/forms.css' %}">
+  <link rel="stylesheet" href="{% static 'css/tables.css' %}">
+  <link rel="stylesheet" href="{% static 'css/modals.css' %}">
+  <link rel="stylesheet" href="{% static 'css/dropdowns.css' %}">
+  <link rel="stylesheet" href="{% static 'css/alerts.css' %}">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'css/animations.css' %}">
+  <link rel="stylesheet" href="{% static 'css/utilities.css' %}">
+  <link rel="stylesheet" href="{% static 'css/responsive.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark">
-  <div class="container">
-    <a class="navbar-brand fw-bold" href="{% url 'home' %}">
-      <i class="bi bi-speedometer2 me-2"></i>Sistema de Ventas
+<div class="app-shell">
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <a class="sidebar-brand" href="{% url 'home' %}">
+      <span class="sidebar-brand-icon"><i data-lucide="gauge"></i></span>
+      <span class="sidebar-brand-text">
+        <strong>TecnoStock S.A.</strong>
+        <span>Sistema de Ventas</span>
+      </span>
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    
-    <div class="collapse navbar-collapse" id="nav">
-      <ul class="navbar-nav me-auto">
-        {% if user.is_authenticated %}
 
-          {% if user|has_group:'Analista de Compras' or user|has_group:'Administrador' %}
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:brand_list' %}"><i class="bi bi-tag me-1"></i>Marcas</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:productgroup_list' %}"><i class="bi bi-grid me-1"></i>Grupos</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:supplier_list' %}"><i class="bi bi-truck me-1"></i>Proveedores</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:product_list' %}"><i class="bi bi-box-seam me-1"></i>Productos</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'purchasing:purchase_list' %}"><i class="bi bi-cart me-1"></i>Compras</a></li>
-          {% endif %}
+    <nav class="sidebar-nav">
+      {% if user.is_authenticated %}
 
-          {% if user|has_group:'Vendedor' or user|has_group:'Administrador' %}
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:customer_list' %}"><i class="bi bi-people me-1"></i>Clientes</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'billing:invoice_list' %}"><i class="bi bi-receipt me-1"></i>Facturas</a></li>
-          {% endif %}
-
-          {% if user|has_group:'Administrador' %}
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'security:dashboard' %}">
-              <i class="bi bi-shield-lock me-1"></i>Seguridad
-            </a>
-          </li>
-          {% endif %}
-
+        {% if user|has_group:'Analista de Compras' or user|has_group:'Administrador' %}
+        <div class="nav-group">
+          <div class="nav-group-title">Compras</div>
+          <div class="nav-group-items">
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'brand_list' %} active{% endif %}" href="{% url 'billing:brand_list' %}" data-label="Marcas"><i data-lucide="tag"></i><span class="nav-item-label">Marcas</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'productgroup_list' %} active{% endif %}" href="{% url 'billing:productgroup_list' %}" data-label="Grupos"><i data-lucide="layout-grid"></i><span class="nav-item-label">Grupos</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'supplier_list' %} active{% endif %}" href="{% url 'billing:supplier_list' %}" data-label="Proveedores"><i data-lucide="truck"></i><span class="nav-item-label">Proveedores</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'product_list' %} active{% endif %}" href="{% url 'billing:product_list' %}" data-label="Productos"><i data-lucide="package"></i><span class="nav-item-label">Productos</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'purchase_list' %} active{% endif %}" href="{% url 'purchasing:purchase_list' %}" data-label="Compras"><i data-lucide="shopping-cart"></i><span class="nav-item-label">Compras</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'purchase_pending_list' %} active{% endif %}" href="{% url 'pagos:purchase_pending_list' %}" data-label="Pagos a Proveedores"><i data-lucide="coins"></i><span class="nav-item-label">Pagos a Proveedores</span></a>
+          </div>
+        </div>
         {% endif %}
-      </ul>
-      
-      <ul class="navbar-nav align-items-center">
+
+        {% if user|has_group:'Vendedor' or user|has_group:'Administrador' %}
+        <div class="nav-group">
+          <div class="nav-group-title">Ventas</div>
+          <div class="nav-group-items">
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'customer_list' %} active{% endif %}" href="{% url 'billing:customer_list' %}" data-label="Clientes"><i data-lucide="users"></i><span class="nav-item-label">Clientes</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'invoice_list' %} active{% endif %}" href="{% url 'billing:invoice_list' %}" data-label="Facturas"><i data-lucide="receipt"></i><span class="nav-item-label">Facturas</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'invoice_pending_list' %} active{% endif %}" href="{% url 'cobros:invoice_pending_list' %}" data-label="Cobros a Clientes"><i data-lucide="wallet"></i><span class="nav-item-label">Cobros a Clientes</span></a>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if user|has_group:'Vendedor' or user|has_group:'Cajero' or user|has_group:'Administrador' %}
+        <div class="nav-group">
+          <div class="nav-group-title">Operación</div>
+          <div class="nav-group-items">
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'caja_historial' %} active{% endif %}" href="{% url 'caja:caja_historial' %}" data-label="Caja"><i data-lucide="store"></i><span class="nav-item-label">Caja</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'devolucion_list' %} active{% endif %}" href="{% url 'devoluciones:devolucion_list' %}" data-label="Devoluciones"><i data-lucide="corner-down-left"></i><span class="nav-item-label">Devoluciones</span></a>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if user|has_group:'Administrador' or user|has_group:'Contador' %}
+        <div class="nav-group">
+          <div class="nav-group-title">Reportes</div>
+          <div class="nav-group-items">
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'reporte_index' %} active{% endif %}" href="{% url 'reportes:reporte_index' %}" data-label="Reportes"><i data-lucide="bar-chart-3"></i><span class="nav-item-label">Reportes</span></a>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if user|has_group:'Administrador' %}
+        <div class="nav-group">
+          <div class="nav-group-title">Administración</div>
+          <div class="nav-group-items">
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'dashboard' and request.resolver_match.app_name == 'security' %} active{% endif %}" href="{% url 'security:dashboard' %}" data-label="Seguridad"><i data-lucide="shield"></i><span class="nav-item-label">Seguridad</span></a>
+            <a class="nav-item-link{% if request.resolver_match.url_name == 'configuracion_editar' %} active{% endif %}" href="{% url 'configuracion:configuracion_editar' %}" data-label="Configuración"><i data-lucide="settings"></i><span class="nav-item-label">Configuración</span></a>
+          </div>
+        </div>
+        {% endif %}
+
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      <button type="button" class="sidebar-collapse-toggle" id="sidebarCollapseToggle" title="Colapsar/expandir menú">
+        <i data-lucide="chevrons-left"></i>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main-column">
+    <header class="header">
+      <button type="button" class="header-toggle-btn header-mobile-toggle" id="sidebarMobileToggle" aria-label="Abrir menú">
+        <i data-lucide="menu"></i>
+      </button>
+
+      <div class="header-search">
+        <i data-lucide="search"></i>
+        <input type="search" placeholder="Buscar en el sistema..." aria-label="Buscar">
+      </div>
+
+      <nav class="breadcrumbs">{% block breadcrumbs %}{% endblock %}</nav>
+
+      <div class="header-spacer"></div>
+
+      <div class="header-actions">
         {% if user.is_authenticated %}
-        <li class="nav-item">
-          <a class="nav-link text-light me-2" href="{% url 'security:profile' %}" title="Editar mis datos">
-            <i class="bi bi-person-circle me-1"></i>{{ user.username }}
-            {% for g in user.groups.all %}
-              <span class="badge bg-light text-dark ms-1" style="font-size:10px;">{{ g.name }}</span>
-            {% endfor %}
-          </a>
-        </li>
-        <li class="nav-item">
-          <form method="post" action="{% url 'logout' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="nav-link btn btn-link p-0" style="color:rgba(255,255,255,.85); text-decoration: none;">
-              <i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión
+          {% include 'partials/notificaciones_dropdown.html' %}
+
+          <button type="button" class="header-icon-btn" id="themeToggle" title="Cambiar tema" aria-label="Cambiar tema claro/oscuro">
+            <i data-lucide="sun" class="icon-theme-light"></i>
+            <i data-lucide="moon" class="icon-theme-dark d-none-force"></i>
+          </button>
+
+          <div class="dropdown">
+            <button class="user-menu-trigger" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="user-avatar">{{ user.username|slice:":1"|upper }}</span>
+              <span class="user-name">{{ user.username }}</span>
+              <i data-lucide="chevron-down" class="icon-sm icon-muted"></i>
             </button>
-          </form>
-        </li>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li class="dropdown-header">
+                {{ user.username }}
+                {% for g in user.groups.all %}<span class="badge badge-neutral">{{ g.name }}</span>{% endfor %}
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item" href="{% url 'security:profile' %}"><i data-lucide="user"></i>Mi perfil</a>
+              </li>
+              <li>
+                <form method="post" action="{% url 'logout' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="dropdown-item"><i data-lucide="log-out"></i>Cerrar sesión</button>
+                </form>
+              </li>
+            </ul>
+          </div>
         {% endif %}
-      </ul>
-    </div>
-  </div>
-</nav>
+      </div>
+    </header>
 
-<div class="container mt-4">
-  {% if messages %}
-    {% for m in messages %}
-    <div class="alert alert-{{ m.tags }} alert-dismissible fade show">
-      {{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    {% endfor %}
-  {% endif %}
-  {% block content %}{% endblock %}
+    {% comment %}
+    OJO: NO le agregues animate-fade-in (ni ninguna otra clase con
+    animation/transform/filter) a este <main> — cualquier <div class="modal">
+    definido dentro de {% block content %} (ej. el cartel de pago en efectivo
+    de invoice_form.html) queda ANIDADO dentro de <main>. Una animación acá
+    crea su propio contexto de apilamiento, y el z-index del modal deja de
+    competir con el .modal-backdrop (que Bootstrap agrega como hijo directo
+    de <body>) — el backdrop termina tapando al modal y sus botones dejan de
+    responder a clics, aunque el z-index en el CSS esté bien puesto.
+    Confirmado con Playwright: quitar esta clase es lo que lo arregla.
+    {% endcomment %}
+    <main class="main-content">
+      {% if messages %}
+        {% for m in messages %}
+        <div class="alert alert-{{ m.tags }}">
+          {{ m }}
+          <button type="button" class="btn-close" aria-label="Cerrar">&times;</button>
+        </div>
+        {% endfor %}
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 </div>
 
-<footer>
-  <p class="mb-0"><i class="bi bi-code-slash me-2"></i>Sistema de Ventas — UNEMI © 2026</p>
-</footer>
+{% include 'partials/delete_modal.html' %}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
+<script src="https://unpkg.com/lucide@latest" defer></script>
+<script src="{% static 'js/icons.js' %}" defer></script>
+<script src="{% static 'js/sidebar.js' %}" defer></script>
+<script src="{% static 'js/theme.js' %}" defer></script>
+<script src="{% static 'js/delete-confirm.js' %}" defer></script>
+<script src="{% static 'js/ui.js' %}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', function () {
+    var lightIcon = document.querySelector('.icon-theme-light');
+    var darkIcon = document.querySelector('.icon-theme-dark');
+    function syncThemeIcon() {
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (lightIcon) lightIcon.classList.toggle('d-none-force', isDark);
+      if (darkIcon) darkIcon.classList.toggle('d-none-force', !isDark);
+    }
+    syncThemeIcon();
+    var themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) themeToggle.addEventListener('click', syncThemeIcon);
+  });
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

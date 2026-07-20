@@ -111,6 +111,44 @@ class Purchase(models.Model):
         max_digits=12, decimal_places=2, default=0, verbose_name='Retención (valor)'
     )
 
+    # Solo aplica a compras al CONTADO (mismo criterio que billing.Invoice):
+    # una compra a CREDITO no tiene forma_pago, ya que se va abonando de a
+    # poco con pagos.PagoCompra, que sí captura su propia forma de pago por
+    # abono. EFECTIVO y TARJETA exigen caja abierta (ver purchase_create);
+    # TARJETA es informativa (sin pasarela real), igual que en
+    # billing/pagos/cobros. PAYPAL acá SÍ es real (Payouts, dinero saliendo
+    # al proveedor) — ver paypal_pagos/services.py -> crear_pago_proveedor(),
+    # reutilizada tal cual de pagos/views.py.
+    EFECTIVO = 'efectivo'
+    TARJETA = 'tarjeta'
+    PAYPAL = 'paypal'
+    FORMA_PAGO_CHOICES = [
+        (EFECTIVO, 'Efectivo'),
+        (TARJETA, 'Tarjeta'),
+        (PAYPAL, 'PayPal'),
+    ]
+    forma_pago = models.CharField(
+        max_length=15, choices=FORMA_PAGO_CHOICES, null=True, blank=True, verbose_name='Forma de pago'
+    )
+    # Solo aplican a TARJETA — informativos, nunca se guarda el número
+    # completo de la tarjeta (mismo criterio que billing.Invoice). Guardar
+    # el CVV/CVC es una decisión consciente pese a ir contra PCI-DSS,
+    # documentada igual que en billing/models.py — no es un descuido.
+    tarjeta_titular = models.CharField(
+        max_length=150, null=True, blank=True, verbose_name='Titular de la tarjeta'
+    )
+    tarjeta_cvv = models.CharField(
+        max_length=4, null=True, blank=True, verbose_name='CVV/CVC'
+    )
+    tarjeta_expiracion = models.DateField(
+        null=True, blank=True, verbose_name='Fecha de expiración de la tarjeta'
+    )
+    # Solo aplica a PAYPAL — el ID del lote (payout_batch_id) que devuelve
+    # la API de Payouts al enviar el pago.
+    paypal_payout_id = models.CharField(
+        max_length=50, null=True, blank=True, verbose_name='ID de payout de PayPal'
+    )
+
     MESES_CREDITO_MAX = 36
 
     # A más meses de plazo, mayor la tasa de interés total sobre el valor de
@@ -164,10 +202,19 @@ class Purchase(models.Model):
                 raise ValidationError({
                     'meses_credito': f'El plazo máximo permitido es de {self.MESES_CREDITO_MAX} meses.'
                 })
-        elif self.meses_credito:
-            raise ValidationError({
-                'meses_credito': 'Una compra al contado no puede tener meses de crédito.'
-            })
+            if self.forma_pago:
+                raise ValidationError({
+                    'forma_pago': 'Una compra a crédito no debe tener forma de pago.'
+                })
+        else:
+            if self.meses_credito:
+                raise ValidationError({
+                    'meses_credito': 'Una compra al contado no puede tener meses de crédito.'
+                })
+            if not self.forma_pago:
+                raise ValidationError({
+                    'forma_pago': 'Indica la forma de pago (efectivo, tarjeta o PayPal).'
+                })
 
     @classmethod
     def tasa_interes(cls, meses):

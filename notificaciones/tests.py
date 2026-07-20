@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
 from django.db import IntegrityError, transaction
@@ -70,6 +71,33 @@ class NotificarStockBajoTests(TestCase):
         notificar_stock_bajo(self.product)
         notificar_stock_bajo(self.product)
         self.assertEqual(Notificacion.objects.filter(tipo=Notificacion.STOCK_BAJO).count(), 1)
+
+
+class CrearSiNoExisteEnviaTelegramTests(TestCase):
+    """Las 4 alertas internas (stock bajo, caja, producto por vencer, pago
+    pendiente) pasan todas por _crear_si_no_existe() — probar acá alcanza
+    para cubrir la integración con Telegram sin repetirla en cada función."""
+
+    def setUp(self):
+        brand = Brand.objects.create(name='Marca')
+        group = ProductGroup.objects.create(name='Grupo')
+        self.product = Product.objects.create(
+            name='Producto', brand=brand, group=group,
+            unit_price=Decimal('10'), stock=0, stock_minimo=5,
+        )
+
+    @patch('notificaciones.services.send_telegram_message')
+    def test_manda_telegram_cuando_se_crea_una_notificacion_nueva(self, mock_telegram):
+        notificar_stock_bajo(self.product)
+        mock_telegram.assert_called_once()
+        self.assertIn(self.product.name, mock_telegram.call_args[0][0])
+
+    @patch('notificaciones.services.send_telegram_message')
+    def test_no_manda_telegram_si_ya_existia_sin_leer(self, mock_telegram):
+        notificar_stock_bajo(self.product)
+        mock_telegram.reset_mock()
+        notificar_stock_bajo(self.product)
+        mock_telegram.assert_not_called()
 
 
 class NotificarCajaDiferenciaTests(TestCase):

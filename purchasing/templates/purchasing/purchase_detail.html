@@ -80,6 +80,19 @@
       <p><strong>Tipo de Pago:</strong> {{ purchase.get_tipo_pago_display }}
         {% if purchase.tipo_pago == 'credito' %}(a {{ purchase.meses_credito }} mes{{ purchase.meses_credito|pluralize:"es" }}){% endif %}
       </p>
+      {% if purchase.forma_pago %}
+      <p><strong>Forma de Pago:</strong> {{ purchase.get_forma_pago_display }}
+        {% if purchase.forma_pago == 'tarjeta' and purchase.tarjeta_titular %}
+          <span class="text-muted small">(titular: {{ purchase.tarjeta_titular }}{% if purchase.tarjeta_expiracion %}, vence {{ purchase.tarjeta_expiracion|date:"m/Y" }}{% endif %})</span>
+        {% elif purchase.forma_pago == 'paypal' and purchase.paypal_payout_id %}
+          <span class="text-muted small">(ID de payout: {{ purchase.paypal_payout_id }})</span>
+        {% endif %}
+      </p>
+      {% comment %}
+        El CVV/CVC nunca se vuelve a mostrar acá, aunque sí se guarda —
+        mismo criterio que invoice_detail.html.
+      {% endcomment %}
+      {% endif %}
       <p><strong>Saldo Pendiente:</strong> ${{ purchase.saldo }}</p>
       <p><strong>Estado:</strong>
         {% if purchase.estado == 'pagada' %}

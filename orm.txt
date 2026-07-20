@@ -3,7 +3,6 @@ apple = Brand.objects.create(name='Apple')
 electronics = ProductGroup.objects.create(name='Electronics')
 dist = Supplier.objects.create(name='TechDist', email='info@tech.com')
 global_s = Supplier.objects.create(name='GlobalSupply')
-phone = Product.objects.create(name='Galaxy S24', brand=samsung, group=electronics, unit_price=999.99, stock=50)
 phone.suppliers.add(dist, global_s)  # M2M
 client = Customer.objects.create(dni='0912345678', first_name='Juan', last_name='Perez')
 profile = CustomerProfile.objects.create(customer=client, taxpayer_type='ruc', payment_terms='credit_30', credit_limit=5000)

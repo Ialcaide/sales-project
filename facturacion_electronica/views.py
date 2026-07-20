@@ -11,25 +11,29 @@ from billing.models import Invoice
 from shared.decorators import permission_required_redirect
 
 from .models import ComprobanteElectronico
-from .services import SRIError, consultar_autorizacion_manual, consultar_autorizacion_publica, reintentar
+from .services import (
+    SRIError, consultar_autorizacion_manual, consultar_autorizacion_publica, enviar_ride_whatsapp, reintentar,
+)
 
 
 # Botón "Reintentar generación" en invoice_detail.html — para el caso borde
 # en que la generación automática (billing/views.py -> _finalizar_venta)
 # falló (SRI caído, certificado mal configurado) o la factura no tiene
-# comprobante todavía.
+# comprobante todavía. reintentar() deja escapar SRIError A PROPÓSITO (es
+# manual, el usuario espera ver el motivo real) — hay que atraparlo acá,
+# si no Django lo convierte en un 500 sin mensaje legible para el usuario.
 @permission_required_redirect('facturacion_electronica.add_comprobanteelectronico', '/invoices/')
 def comprobante_reintentar(request, invoice_id):
     invoice = get_object_or_404(Invoice, pk=invoice_id)
-    comprobante = reintentar(invoice)
-    if comprobante is None:
-        messages.error(
-            request,
-            'No se pudo generar el comprobante: revisa la configuración de SRI en Configuración del Sistema.'
-        )
-    elif comprobante.estado == ComprobanteElectronico.AUTORIZADO:
+    try:
+        comprobante = reintentar(invoice)
+    except SRIError as e:
+        messages.error(request, f'No se pudo generar/enviar el comprobante: {e}')
+        return redirect('billing:invoice_detail', pk=invoice_id)
+
+    if comprobante.estado == ComprobanteElectronico.AUTORIZADO:
         messages.success(request, f'Comprobante autorizado por el SRI (N° {comprobante.numero_autorizacion}).')
-    elif comprobante.estado == ComprobanteElectronico.ERROR:
+    elif comprobante.estado in (ComprobanteElectronico.ERROR, ComprobanteElectronico.NO_AUTORIZADO):
         mensaje = comprobante.mensajes[-1] if comprobante.mensajes else 'Error desconocido.'
         messages.error(request, f'No se pudo generar/enviar el comprobante: {mensaje}')
     else:
@@ -82,6 +86,30 @@ def comprobante_ride_pdf(request, pk):
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="ride_{comprobante.clave_acceso}.pdf"'
     return response
+
+
+# Botón "Enviar por WhatsApp" en invoice_detail.html — a diferencia del
+# WhatsApp automático de la venta (Twilio, solo texto, ver
+# billing/views.py -> _finalizar_venta), este SÍ entrega el PDF del RIDE
+# adjunto, vía Ultramsg (ver sri_facturacion_service/whatsapp_client.py).
+@permission_required_redirect('facturacion_electronica.view_comprobanteelectronico', '/invoices/')
+def comprobante_enviar_whatsapp(request, pk):
+    from .ride import build_ride_pdf
+
+    comprobante = get_object_or_404(ComprobanteElectronico, pk=pk)
+    invoice = comprobante.invoice
+    if not invoice.customer.phone:
+        messages.error(request, 'El cliente no tiene un número de teléfono registrado.')
+        return redirect('billing:invoice_detail', pk=invoice.pk)
+
+    try:
+        pdf_bytes = build_ride_pdf(comprobante)
+        enviar_ride_whatsapp(comprobante, invoice.customer.phone, invoice.customer.full_name, pdf_bytes)
+    except SRIError as e:
+        messages.error(request, f'No se pudo enviar la factura por WhatsApp: {e}')
+    else:
+        messages.success(request, f'Factura enviada por WhatsApp a {invoice.customer.phone}.')
+    return redirect('billing:invoice_detail', pk=invoice.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +196,11 @@ def verificar_autorizacion_api(request):
     return JsonResponse({
         'ok': True,
         'clave_acceso': clave_acceso,
+        # 'estado' es el EstadoFactura tal cual lo manda el microservicio:
+        # generada/firmada/enviada/autorizada/rechazada/error (ver
+        # consultar_autorizacion_publica en services.py).
         'estado_sri': estado,
-        'autorizado': estado == 'AUTORIZADO',
+        'autorizado': estado == 'autorizada',
         'numero_autorizacion': numero_autorizacion,
         'fecha_autorizacion': fecha_autorizacion.isoformat() if fecha_autorizacion else None,
         'mensajes': mensajes,

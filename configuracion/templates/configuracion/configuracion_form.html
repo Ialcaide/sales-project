@@ -1,6 +1,18 @@
 {% extends 'billing/base.html' %}
 {% block title %}Configuración del Sistema{% endblock %}
 {% block breadcrumbs %}<span class="current">Configuración</span>{% endblock %}
+{% block extra_css %}
+<style>
+  /* El proyecto no carga el bootstrap.css completo (solo grid + utilities,
+     ver billing/base.html) y hasta ahora ningún template usaba
+     data-bs-toggle="collapse" — así que falta la regla que oculta el
+     contenido colapsado. Sin esto, bootstrap.bundle.min.js sigue
+     alternando la clase .show correctamente, pero el bloque queda visible
+     siempre sin importar el estado del botón. */
+  .collapse:not(.show) { display: none; }
+  .collapsing { height: 0; overflow: hidden; transition: height .3s ease; }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="mb-4">
@@ -69,6 +81,12 @@
           {{ form.credito_porcentaje_por_compras }}
         </div>
         <div class="col-md-4">
+          <label class="form-label">{{ form.retencion_porcentaje_default.label }}</label>
+          {{ form.retencion_porcentaje_default }}
+          {% for error in form.retencion_porcentaje_default.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          <div class="form-text">Valor inicial al registrar una compra nueva — se puede ajustar por compra.</div>
+        </div>
+        <div class="col-md-4">
           <label class="form-label">{{ form.dias_credito_factura_default.label }}</label>
           {{ form.dias_credito_factura_default }}
         </div>
@@ -85,7 +103,7 @@
   </div>
 
   <div class="card mb-4">
-    <div class="card-header">Facturación Electrónica (SRI)</div>
+    <div class="card-header">Valores por Defecto — Nueva Empresa (SRI)</div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-3">
@@ -110,9 +128,9 @@
         </div>
       </div>
       <div class="form-text mt-2">
-        El RUC y la dirección matriz son los de "Datos de la Empresa" arriba. El certificado de firma
-        electrónica (.p12) y su contraseña se configuran aparte, en el archivo <code>.env</code> del
-        servidor (nunca desde esta pantalla) — ver <code>SRI_CERTIFICADO_PATH</code> / <code>SRI_CERTIFICADO_PASSWORD</code>.
+        El establecimiento y punto de emisión de acá son solo el valor inicial que se pre-carga al conectar
+        una empresa nueva más abajo — <strong>no</strong> afectan a la empresa que está facturando hoy (para
+        eso, usá "Editar Datos" en la sección "Empresa Facturando Actualmente").
       </div>
     </div>
   </div>
@@ -121,5 +139,284 @@
     <button type="submit" class="btn btn-primary"><i data-lucide="check-circle"></i>Guardar Configuración</button>
   </div>
 </form>
+
+<div class="card mb-4">
+  <div class="card-header"><span class="icon-text"><i data-lucide="building-2" class="icon-sm icon-primary"></i>Empresa Facturando Actualmente</span></div>
+  <div class="card-body">
+    {% if empresa_activa %}
+      <div class="row g-4">
+        <div class="col-md-3">
+          <div class="text-muted small mb-1">RUC</div>
+          <div class="fw-bold">{{ empresa_activa.ruc }}</div>
+        </div>
+        <div class="col-md-6">
+          <div class="text-muted small mb-1">Razón social</div>
+          <div class="fw-bold">{{ empresa_activa.razon_social }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted small mb-1">Ambiente</div>
+          {% if empresa_activa.ambiente == config.AMBIENTE_PRODUCCION %}
+            <span class="badge bg-success">Producción</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">Pruebas</span>
+          {% endif %}
+        </div>
+      </div>
+      <hr class="my-3">
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editarEmpresaModal">
+          <i data-lucide="pencil"></i>Editar Datos
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#cambiarAmbienteModal">
+          <i data-lucide="repeat"></i>Cambiar de Ambiente
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#empresasConectadasCollapse">
+          <i data-lucide="list"></i>Ver Empresas Conectadas
+        </button>
+      </div>
+    {% else %}
+      <p class="text-muted mb-3">Todavía no hay ninguna empresa conectada.</p>
+      <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#empresasConectadasCollapse">
+        <i data-lucide="list"></i>Ver Empresas Conectadas
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="collapse mb-4" id="empresasConectadasCollapse">
+  <div class="card">
+    <div class="card-header"><span class="icon-text"><i data-lucide="list" class="icon-sm icon-primary"></i>Empresas Conectadas</span></div>
+    <div class="card-body">
+      {% if empresas %}
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead>
+              <tr>
+                <th>RUC</th>
+                <th>Razón social</th>
+                <th>Ambiente</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for empresa in empresas %}
+                <tr>
+                  <td>{{ empresa.ruc }}</td>
+                  <td>{{ empresa.razon_social }}</td>
+                  <td>{{ empresa.get_ambiente_display }}</td>
+                  <td>
+                    {% if empresa.activa %}
+                      <span class="badge bg-success">Activa</span>
+                    {% else %}
+                      <span class="badge bg-secondary">Inactiva</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if empresa.activa %}
+                      <span class="text-muted small">En uso</span>
+                    {% else %}
+                      <form method="post" action="{% url 'configuracion:activar_empresa_facturacion_electronica' empresa.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Usar esta</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">Todavía no hay ninguna empresa conectada.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<p>
+  <button type="button" class="btn btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#conectarEmpresaCollapse">
+    <i data-lucide="plus"></i>Conectar Nueva Empresa
+  </button>
+</p>
+<div class="collapse" id="conectarEmpresaCollapse">
+  <div class="card mb-4">
+    <div class="card-header"><span class="icon-text"><i data-lucide="link" class="icon-sm icon-primary"></i>Conectar una Empresa Nueva</span></div>
+    <div class="card-body">
+      <p class="text-muted">
+        Da de alta una empresa nueva en el microservicio de facturación electrónica y la agrega (activada) a la
+        lista de arriba. El archivo .p12 y su contraseña <strong>nunca se guardan en TecnoStock</strong>: se
+        reenvían al microservicio en el momento y se descartan.
+      </p>
+      <form method="post" enctype="multipart/form-data" action="{% url 'configuracion:conectar_facturacion_electronica' %}">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">{{ conectar_form.ruc.label }}</label>
+            {{ conectar_form.ruc }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">{{ conectar_form.razon_social.label }}</label>
+            {{ conectar_form.razon_social }}
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">{{ conectar_form.direccion_matriz.label }}</label>
+            {{ conectar_form.direccion_matriz }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ conectar_form.establecimiento.label }}</label>
+            {{ conectar_form.establecimiento }}
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">{{ conectar_form.punto_emision.label }}</label>
+            {{ conectar_form.punto_emision }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ conectar_form.ambiente.label }}</label>
+            {{ conectar_form.ambiente }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ conectar_form.certificado_p12.label }}</label>
+            {{ conectar_form.certificado_p12 }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ conectar_form.certificado_password.label }}</label>
+            {{ conectar_form.certificado_password }}
+          </div>
+        </div>
+        <div class="d-flex justify-content-end mt-3">
+          <button type="submit" class="btn btn-primary"><i data-lucide="link"></i>Conectar Empresa</button>
+        </div>
+      </form>
+
+      <hr class="my-4">
+
+      <p class="mb-0">
+        <a href="#" class="icon-text small" data-bs-toggle="collapse" data-bs-target="#vincularEmpresaCollapse">
+          <i data-lucide="key" class="icon-sm"></i>¿Ya tienes una empresa dada de alta? Vincúlala con su código interno
+        </a>
+      </p>
+      <div class="collapse mt-3" id="vincularEmpresaCollapse">
+        <p class="text-muted small">
+          Si la empresa ya está dada de alta del lado del microservicio (por ejemplo, creada por script), pega su
+          api_key acá para traer sus datos y activarla, sin volver a darla de alta.
+        </p>
+        <form method="post" action="{% url 'configuracion:vincular_empresa_existente' %}">
+          {% csrf_token %}
+          <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label">{{ vincular_form.api_key.label }}</label>
+              {{ vincular_form.api_key }}
+            </div>
+            <div class="col-md-4">
+              <button type="submit" class="btn btn-outline-primary w-100"><i data-lucide="link"></i>Vincular Empresa</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if empresa_activa %}
+<div class="modal fade" id="editarEmpresaModal" tabindex="-1" aria-labelledby="editarEmpresaModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" enctype="multipart/form-data" action="{% url 'configuracion:editar_empresa_activa' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="editarEmpresaModalLabel">Editar Datos de la Empresa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          {% if editar_empresa_form.non_field_errors %}
+            <div class="alert alert-danger">{{ editar_empresa_form.non_field_errors }}</div>
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">RUC</label>
+              <input type="text" class="form-control" value="{{ empresa_activa.ruc }}" disabled>
+              <div class="form-text">No editable acá — conectar un RUC distinto es dar de alta una empresa nueva.</div>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">{{ editar_empresa_form.razon_social.label }}</label>
+              {{ editar_empresa_form.razon_social }}
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">{{ editar_empresa_form.direccion_matriz.label }}</label>
+              {{ editar_empresa_form.direccion_matriz }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">{{ editar_empresa_form.establecimiento.label }}</label>
+              {{ editar_empresa_form.establecimiento }}
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">{{ editar_empresa_form.punto_emision.label }}</label>
+              {{ editar_empresa_form.punto_emision }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">{{ editar_empresa_form.ambiente.label }}</label>
+              {{ editar_empresa_form.ambiente }}
+            </div>
+          </div>
+          <hr class="my-3">
+          <h6 class="fw-bold">Renovar Certificado (opcional)</h6>
+          <p class="text-muted small">
+            Dejalo en blanco si no querés cambiar el certificado. El archivo y la contraseña
+            <strong>nunca se guardan en TecnoStock</strong>: se reenvían al microservicio y se descartan.
+          </p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">{{ editar_empresa_form.certificado_p12.label }}</label>
+              {{ editar_empresa_form.certificado_p12 }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ editar_empresa_form.certificado_password.label }}</label>
+              {{ editar_empresa_form.certificado_password }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="check-circle"></i>Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="cambiarAmbienteModal" tabindex="-1" aria-labelledby="cambiarAmbienteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="cambiarAmbienteModalLabel">Cambiar de Ambiente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        {% if empresa_activa.ambiente == config.AMBIENTE_PRUEBAS %}
+          <p>Vas a pasar <strong>{{ empresa_activa.razon_social }}</strong> de <strong>Pruebas</strong> a <strong>Producción</strong>.</p>
+          <div class="alert alert-danger">
+            <i data-lucide="triangle-alert" class="icon-sm"></i>
+            Las facturas que se generen desde ahora tendrán <strong>efecto legal real</strong> ante el SRI — dejan de ser de prueba.
+          </div>
+        {% else %}
+          <p>Vas a pasar <strong>{{ empresa_activa.razon_social }}</strong> de <strong>Producción</strong> a <strong>Pruebas</strong>.</p>
+          <div class="alert alert-warning">
+            <i data-lucide="triangle-alert" class="icon-sm"></i>
+            Las facturas que se generen desde ahora NO tendrán validez legal ante el SRI (ambiente de pruebas).
+          </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{% url 'configuracion:cambiar_ambiente_empresa_activa' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary">Confirmar Cambio</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}

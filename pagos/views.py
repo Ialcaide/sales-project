@@ -3,9 +3,12 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from caja.models import MovimientoCaja, SesionCaja
 from configuracion.models import ConfiguracionSistema
+from paypal_pagos.client import PayPalError
+from paypal_pagos.services import crear_pago_proveedor
 from purchasing.models import Purchase
 from shared.decorators import permission_required_redirect
 from shared.notifications import send_email_with_attachment, send_whatsapp_message
@@ -53,29 +56,58 @@ def pago_create(request, compra_id):
     if request.method == 'POST':
         form = PagoCompraForm(request.POST, compra=compra)
         if form.is_valid():
-            # Un pago en EFECTIVO sale físicamente de la caja del usuario —
-            # exige una SesionCaja abierta, mismo criterio espejo que
-            # billing/views.py -> invoice_create con ventas en efectivo.
+            forma_pago = form.cleaned_data.get('forma_pago')
+            # EFECTIVO y TARJETA exigen una SesionCaja abierta (venta de
+            # mostrador), mismo criterio espejo que billing/views.py ->
+            # invoice_create — pero TARJETA no genera MovimientoCaja: ese
+            # dinero no entra físicamente a la caja, va a un datáfono externo.
             sesion_caja = None
-            if form.cleaned_data.get('forma_pago') == PagoCompra.EFECTIVO:
+            if forma_pago in (PagoCompra.EFECTIVO, PagoCompra.TARJETA):
                 sesion_caja = SesionCaja.objects.filter(
                     usuario=request.user, estado=SesionCaja.ABIERTA
                 ).first()
                 if not sesion_caja:
                     messages.error(
                         request,
-                        'Debes abrir una caja antes de registrar un pago en efectivo a un proveedor.'
+                        'Debes abrir una caja antes de registrar un pago en efectivo o tarjeta a un proveedor.'
                     )
+                    return render(request, 'pagos/pago_form.html', {
+                        'form': form, 'compra': compra, 'title': 'Registrar Pago',
+                    })
+
+            # PAYPAL acá es un pago REAL (Payouts, dinero saliendo al
+            # proveedor) — a diferencia de EFECTIVO/TARJETA, no hace falta
+            # caja abierta (el dinero nunca pasa por la caja física), pero
+            # SÍ hay que confirmar que el envío se hizo de verdad ANTES de
+            # guardar el PagoCompra: igual que billing nunca crea la Invoice
+            # hasta que el pago está resuelto, acá no se registra el pago
+            # si el payout falla.
+            paypal_payout_id = None
+            if forma_pago == PagoCompra.PAYPAL:
+                referencia = f'pago-compra-{compra.id}-{timezone.now():%Y%m%d%H%M%S%f}'
+                try:
+                    paypal_payout_id, _status = crear_pago_proveedor(
+                        compra.supplier, form.cleaned_data['valor'], referencia,
+                    )
+                except PayPalError as e:
+                    messages.error(request, str(e))
                     return render(request, 'pagos/pago_form.html', {
                         'form': form, 'compra': compra, 'title': 'Registrar Pago',
                     })
 
             pago = form.save(commit=False)
             pago.compra = compra
+            # Los campos de tarjeta solo se guardan si de verdad se pagó con
+            # tarjeta — evita que quede una constancia de tarjeta "fantasma"
+            # si el usuario la llenó y después cambió la forma de pago antes
+            # de enviar (mismo criterio que billing/views.py -> _finalizar_venta).
+            if forma_pago != PagoCompra.TARJETA:
+                pago.tarjeta_titular = pago.tarjeta_cvv = pago.tarjeta_expiracion = None
+            pago.paypal_payout_id = paypal_payout_id
             try:
                 with transaction.atomic():
                     pago.save()
-                    if sesion_caja:
+                    if sesion_caja and forma_pago == PagoCompra.EFECTIVO:
                         MovimientoCaja.objects.create(
                             sesion=sesion_caja, tipo=MovimientoCaja.EGRESO, monto=pago.valor,
                             concepto=f'Pago compra #{compra.id:04d} - {compra.supplier.name}',
@@ -137,9 +169,12 @@ def pago_update(request, pk):
     if request.method == 'POST':
         form = PagoCompraForm(request.POST, instance=pago, compra=compra)
         if form.is_valid():
+            pago = form.save(commit=False)
+            if form.cleaned_data.get('forma_pago') != PagoCompra.TARJETA:
+                pago.tarjeta_titular = pago.tarjeta_cvv = pago.tarjeta_expiracion = None
             try:
                 with transaction.atomic():
-                    form.save()
+                    pago.save()
             except ValidationError as e:
                 messages.error(request, ' '.join(e.messages))
             else:

@@ -43,6 +43,7 @@ urlpatterns = [
     path('configuracion/', include('configuracion.urls')),         # /configuracion/... IVA, empresa, umbrales
     path('paypal/', include('paypal_pagos.urls')),                  # /paypal/... return/cancel/webhook
     path('facturacion-electronica/', include('facturacion_electronica.urls')),  # SRI: reintentar, autorización, RIDE
+    path('rrhh/', include('RRHumanos.urls')),                       # RRHH / Préstamos
     path('', include('home.urls')),                                # / -> dashboard (debe ir ANTES que billing.urls)
     path('', include('billing.urls')),                             # /products/, /customers/, /invoices/, etc.
     # django.conf.urls.static.static() (el helper "de manual" de Django)

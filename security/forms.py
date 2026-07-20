@@ -18,17 +18,11 @@ class UserRegisterForm(UserCreationForm):
     """
     email = forms.EmailField(required=True)
     phone = forms.CharField(required=True, label='Teléfono / WhatsApp')
-    role = forms.ModelChoiceField(
-        queryset=Group.objects.all(),
-        required=True,
-        label='Role',
-        empty_label='-- Select a role --',
-    )
 
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name', 'email',
-                  'password1', 'password2', 'phone', 'role']
+                  'password1', 'password2', 'phone']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,7 +82,6 @@ class UserRegisterForm(UserCreationForm):
         # grupo/rol elegido, y crear su UserProfile con el teléfono.
         user = super().save(commit)
         if commit:
-            user.groups.add(self.cleaned_data['role'])
             UserProfile.objects.create(user=user, phone=self.cleaned_data['phone'])
         return user
 

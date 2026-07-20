@@ -12,16 +12,21 @@ class PagoCompra(models.Model):
     saldo) — así el saldo de la Purchase nunca se actualiza "a mano" desde
     las vistas, siempre pasa por acá.
     """
-    # Solo informativo (con qué medio se le pagó de verdad al proveedor,
-    # fuera del sistema) — a diferencia de billing.Invoice.forma_pago=PAYPAL,
-    # acá no dispara ninguna integración real: pagarle a un proveedor por
-    # PayPal es un ENVÍO de dinero (API de Payouts), no una recepción de pago
-    # (API de Checkout, la que sí usa paypal_pagos), así que queda fuera de
-    # alcance — esto solo deja constancia de cómo se pagó.
+    # PayPal acá SÍ es real: paga de verdad al proveedor vía la API de
+    # Payouts de PayPal (dinero SALIENDO del negocio) — distinta de la API
+    # de Checkout/Orders que usan billing/cobros para RECIBIR pagos (ver
+    # paypal_pagos/client.py -> crear_payout(), paypal_pagos/services.py ->
+    # crear_pago_proveedor()). A diferencia de esas, Payouts no tiene un
+    # paso de aprobación del receptor: se resuelve en la misma llamada, sin
+    # redirect ni caja abierta. TARJETA sigue siendo la misma captura
+    # informativa que billing.Invoice (ver tarjeta_titular/cvv/expiracion
+    # más abajo) — no hay ninguna pasarela real integrada para tarjeta.
     EFECTIVO = 'efectivo'
+    TARJETA = 'tarjeta'
     PAYPAL = 'paypal'
     FORMA_PAGO_CHOICES = [
         (EFECTIVO, 'Efectivo'),
+        (TARJETA, 'Tarjeta'),
         (PAYPAL, 'PayPal'),
     ]
 
@@ -32,6 +37,25 @@ class PagoCompra(models.Model):
     valor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Valor')
     forma_pago = models.CharField(
         max_length=15, choices=FORMA_PAGO_CHOICES, default=EFECTIVO, verbose_name='Forma de pago'
+    )
+    # Solo aplican a TARJETA — informativos, nunca se guarda el número
+    # completo de la tarjeta (mismo criterio que billing.Invoice). Guardar
+    # el CVV/CVC es una decisión consciente pese a ir contra PCI-DSS,
+    # documentada igual que en billing/models.py — no es un descuido.
+    tarjeta_titular = models.CharField(
+        max_length=150, null=True, blank=True, verbose_name='Titular de la tarjeta'
+    )
+    tarjeta_cvv = models.CharField(
+        max_length=4, null=True, blank=True, verbose_name='CVV/CVC'
+    )
+    tarjeta_expiracion = models.DateField(
+        null=True, blank=True, verbose_name='Fecha de expiración de la tarjeta'
+    )
+    # Solo aplica a PAYPAL — el ID del lote (payout_batch_id) que devuelve
+    # la API de Payouts al enviar el pago, para poder rastrearlo del lado
+    # de PayPal si hiciera falta.
+    paypal_payout_id = models.CharField(
+        max_length=50, null=True, blank=True, verbose_name='ID de payout de PayPal'
     )
     observacion = models.TextField(blank=True, verbose_name='Observación')
 

@@ -1,0 +1,77 @@
+{% extends 'billing/base.html' %}
+{% block title %}Préstamo{% endblock %}
+{% block breadcrumbs %}
+  <a href="{% url 'RRHumanos:prestamo_list' %}">Préstamos</a>
+  <span class="separator">/</span>
+  <span class="current">{% if object %}Editar{% else %}Nuevo{% endif %} Préstamo</span>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrapper">
+  <div class="form-header">
+    <div class="form-header-icon"><i data-lucide="coins"></i></div>
+    <div class="form-header-text">
+      <h4>{% if object %}Editar{% else %}Nuevo{% endif %} Préstamo</h4>
+      <p>Registra la solicitud del préstamo para el empleado</p>
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-4">
+      {% for error in form.non_field_errors %}
+        <div>{{ error }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-4">
+      <div class="col-md-6">
+        <label class="field-label">Empleado</label>
+        {{ form.empleado }}
+        {% if form.empleado.errors %}
+          <div class="text-danger small mt-1">{{ form.empleado.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <label class="field-label">Tipo de Préstamo</label>
+        {{ form.tipo_prestamo }}
+        {% if form.tipo_prestamo.errors %}
+          <div class="text-danger small mt-1">{{ form.tipo_prestamo.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <label class="field-label">Fecha del Préstamo</label>
+        {{ form.fecha_prestamo }}
+        {% if form.fecha_prestamo.errors %}
+          <div class="text-danger small mt-1">{{ form.fecha_prestamo.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <label class="field-label">Monto Solicitado ($)</label>
+        {{ form.monto }}
+        {% if form.monto.errors %}
+          <div class="text-danger small mt-1">{{ form.monto.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+
+      <div class="col-md-6">
+        <label class="field-label">Número de Cuotas</label>
+        {{ form.numero_cuotas }}
+        {% if form.numero_cuotas.errors %}
+          <div class="text-danger small mt-1">{{ form.numero_cuotas.errors|join:", " }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-actions mt-4">
+      <a href="{% url 'RRHumanos:prestamo_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-primary">{% if object %}Guardar Cambios{% else %}Registrar Préstamo{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

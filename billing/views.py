@@ -18,7 +18,7 @@ from shared.mixins import PermissionRequiredRedirectMixin
 from shared.decorators import audit_action, permission_required_redirect
 from shared.notifications import send_email_with_attachments, send_whatsapp_message, send_credentials_email, get_admin_recipients
 from caja.models import SesionCaja, MovimientoCaja
-from configuracion.models import ConfiguracionSistema
+from configuracion.models import ConfiguracionSistema, EmpresaFacturacionElectronica
 from notificaciones.services import notificar_stock_bajo
 from shared.pagination import build_extra_qs, get_page_range
 
@@ -923,6 +923,19 @@ def invoice_create(request):
                 from paypal_pagos.client import PayPalError
                 from paypal_pagos.services import crear_orden_venta
 
+                # Igual que efectivo/tarjeta: se exige caja abierta ANTES de
+                # iniciar el checkout de PayPal (no después, cuando ya se
+                # capturó el pago — en ese punto la venta ya no se puede
+                # rechazar sin dejar un cobro real sin factura asociada).
+                tiene_caja_abierta = SesionCaja.objects.filter(
+                    usuario=request.user, estado=SesionCaja.ABIERTA
+                ).exists()
+                if not tiene_caja_abierta:
+                    messages.error(request, 'Debes abrir una caja antes de registrar una venta con paypal.')
+                    return render(request, 'billing/invoice_form.html', {
+                        **context_base, 'form': form, 'formset': formset
+                    })
+
                 lineas = [
                     {'product_id': f.cleaned_data['product'].id, 'quantity': f.cleaned_data['quantity'],
                      'unit_price': str(f.cleaned_data['unit_price'])}
@@ -988,6 +1001,46 @@ def invoice_create(request):
         'form': form,
         'formset': formset,
     })
+
+
+# Nombre/RUC/dirección a mostrar como emisor en el PDF y el correo de la
+# factura de venta: los de la empresa activa en Facturación Electrónica (la
+# que realmente firma esta misma factura ante el SRI vía
+# facturacion_electronica.services._payload_desde_invoice), para que el
+# membrete de la factura nunca contradiga a quien la firmó. Si todavía no
+# hay ninguna empresa conectada, cae a los datos generales de
+# ConfiguracionSistema — evita una factura en blanco antes de conectar la
+# primera empresa, cuando no hay ninguna firma electrónica en juego.
+def _datos_emisor(config):
+    empresa = EmpresaFacturacionElectronica.get_activa()
+    if empresa is None:
+        return config.empresa_nombre, config.empresa_ruc, config.empresa_direccion
+    return empresa.razon_social, empresa.ruc, empresa.direccion_matriz
+
+
+# Qué documento mostrar/descargar/adjuntar para una factura: el RIDE REAL
+# del SRI (vía el microservicio) si el comprobante electrónico ya está
+# AUTORIZADO — es el comprobante legal de esa venta, no tiene sentido
+# seguir mostrando el PDF armado acá en paralelo. Para cualquier otro caso
+# (sin comprobante, comprobante en un estado no definitivo, o la empresa
+# activa no tiene facturación electrónica conectada) se sigue usando
+# _build_invoice_pdf como respaldo — el sistema no puede depender de que el
+# SRI/microservicio estén funcionando para poder facturar. Si el
+# comprobante SÍ está autorizado pero el microservicio no puede entregar el
+# RIDE justo en este momento (best effort, mismo criterio que el resto de
+# la integración SRI), también cae al PDF local en vez de fallar.
+def _documento_factura(invoice):
+    comprobante = getattr(invoice, 'comprobante_electronico', None)
+    if comprobante is not None:
+        from facturacion_electronica.models import ComprobanteElectronico
+        if comprobante.estado == ComprobanteElectronico.AUTORIZADO:
+            from facturacion_electronica.ride import build_ride_pdf
+            from facturacion_electronica.services import SRIError
+            try:
+                return build_ride_pdf(comprobante), f'ride_{invoice.id:04d}.pdf', True
+            except SRIError:
+                pass
+    return _build_invoice_pdf(invoice), f'factura_{invoice.id:04d}.pdf', False
 
 
 # Crea la Invoice real + sus InvoiceDetail, baja stock, calcula totales,
@@ -1069,47 +1122,37 @@ def _finalizar_venta(
             invoice=invoice,
         )
 
-    # Enviar automáticamente el PDF de la factura al correo del cliente,
-    # junto con el RIDE y el XML del comprobante electrónico si el SRI ya
-    # llegó a generarlos (best effort: si la parte SRI falló del todo,
-    # `comprobante` queda None y el correo sale igual, solo con el PDF del
-    # sistema). Se reutiliza _build_invoice_pdf (la misma función que arma
-    # el PDF para la descarga manual en invoice_pdf) para no duplicar el
-    # diseño del comprobante en dos lugares. Consumidor Final nunca recibe
-    # correo (es una venta anónima de mostrador).
+    # Enviar automáticamente el documento de la factura al correo del
+    # cliente, junto con el XML del comprobante electrónico si el SRI ya lo
+    # generó (best effort: si la parte SRI falló del todo, `comprobante`
+    # queda None y el correo sale igual, solo con el PDF local). El
+    # documento en sí (PDF local o RIDE real) lo decide _documento_factura
+    # — mismo criterio que usa invoice_pdf para la descarga manual, así el
+    # diseño del comprobante no se duplica en dos lugares. Consumidor Final
+    # nunca recibe correo (es una venta anónima de mostrador).
     email_enviado = False
     if invoice.customer.email and not invoice.customer.es_consumidor_final:
-        pdf_bytes = _build_invoice_pdf(invoice)
-        adjuntos = [(f'factura_{invoice.id:04d}.pdf', pdf_bytes, 'application/pdf')]
+        pdf_bytes, nombre_pdf, es_ride = _documento_factura(invoice)
+        adjuntos = [(nombre_pdf, pdf_bytes, 'application/pdf')]
         detalle_sri = ''
         if comprobante is not None:
-            from facturacion_electronica.services import SRIError
-            from facturacion_electronica.ride import build_ride_pdf
-            # build_ride_pdf ahora le pide el PDF a sri_facturacion_service
-            # por red (antes era un render local que casi no podía fallar) —
-            # si el servicio está caído justo en este momento, el correo
-            # debe salir igual, solo sin el RIDE adjunto (mismo criterio
-            # "best effort" que ya aplica a la generación del comprobante).
-            try:
-                adjuntos.append((f'ride_{invoice.id:04d}.pdf', build_ride_pdf(comprobante), 'application/pdf'))
-                hubo_ride = True
-            except SRIError:
-                hubo_ride = False
             xml = comprobante.xml_autorizado or comprobante.xml_firmado or comprobante.xml_generado
             if xml:
                 adjuntos.append((f'factura_sri_{invoice.id:04d}.xml', xml.encode('utf-8'), 'application/xml'))
                 detalle_sri = (
-                    ' También adjuntamos el RIDE y el XML de tu comprobante electrónico del SRI.' if hubo_ride
+                    ' El PDF adjunto es tu comprobante electrónico autorizado por el SRI (RIDE); también '
+                    'adjuntamos su XML.' if es_ride
                     else ' También adjuntamos el XML de tu comprobante electrónico del SRI.'
                 )
-        subject = f'Tu factura #{invoice.id:04d} — {config.empresa_nombre}'
+        razon_social_emisor = _datos_emisor(config)[0]
+        subject = f'Tu factura #{invoice.id:04d} — {razon_social_emisor}'
         body = (
             f'Estimado/a {invoice.customer.full_name},\n\n'
             f'Adjuntamos el PDF de tu factura #{invoice.id:04d} por un total de ${invoice.total}.'
             f'{detalle_sri}\n\n'
             f'Gracias por tu compra.\n\n'
             f'Atentamente,\n'
-            f'{config.empresa_nombre}'
+            f'{razon_social_emisor}'
         )
         productos_ctx = [
             {'nombre': d.product.name, 'cantidad': d.quantity, 'subtotal': f'${d.subtotal}'}
@@ -1184,10 +1227,11 @@ def _build_invoice_pdf(invoice):
         textColor=colors.HexColor('#334155'), spaceAfter=2)
 
     config = ConfiguracionSistema.get_solo()
-    story.append(Paragraph(config.empresa_nombre, title_style))
+    razon_social_emisor, ruc_emisor, direccion_emisor = _datos_emisor(config)
+    story.append(Paragraph(razon_social_emisor, title_style))
     story.append(Paragraph('Sistema de Ventas y Facturación', sub_style))
     datos_empresa = ' | '.join(
-        d for d in [config.empresa_ruc and f'RUC: {config.empresa_ruc}', config.empresa_direccion, config.empresa_telefono] if d
+        d for d in [ruc_emisor and f'RUC: {ruc_emisor}', direccion_emisor, config.empresa_telefono] if d
     )
     if datos_empresa:
         story.append(Paragraph(datos_empresa, sub_style))
@@ -1264,7 +1308,7 @@ def _build_invoice_pdf(invoice):
     story.append(Spacer(1, 0.5*cm))
     story.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 0.2*cm))
-    story.append(Paragraph(f'Gracias por su compra — {config.empresa_nombre}', sub_style))
+    story.append(Paragraph(f'Gracias por su compra — {razon_social_emisor}', sub_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -1279,9 +1323,9 @@ def invoice_pdf(request, pk):
         Invoice.objects.select_related('customer').prefetch_related('details__product'),
         pk=pk
     )
-    pdf_bytes = _build_invoice_pdf(invoice)
+    pdf_bytes, nombre_pdf, _es_ride = _documento_factura(invoice)
     response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="factura_{invoice.id:04d}.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="{nombre_pdf}"'
     return response
 
 
@@ -1323,6 +1367,7 @@ def product_barcode_print(request, pk):
 
 @permission_required_redirect('billing.delete_invoice', '/invoices/')
 def invoice_delete(request, pk):
+    from django.db import models
     invoice = get_object_or_404(Invoice, pk=pk)
     if request.method == 'POST':
         # Al borrar una factura, hay que devolver al inventario lo que se
@@ -1334,7 +1379,23 @@ def invoice_delete(request, pk):
             product.stock += detail.quantity
             product.save()
         invoice_id = invoice.id
-        invoice.delete()
+        try:
+            invoice.delete()
+        except models.deletion.ProtectedError:
+            # La factura tiene un Comprobante Electrónico vinculado con FK PROTECT
+            # — no se puede borrar físicamente sin eliminar primero el comprobante.
+            # Revertimos el stock que ya sumamos para no dejarlo inflado.
+            for detail in invoice.details.all():
+                product = detail.product
+                product.stock -= detail.quantity
+                product.save()
+            messages.error(
+                request,
+                f'No se puede eliminar la factura #{invoice_id:04d} porque tiene un '
+                f'comprobante electrónico asociado. Para eliminarla, primero borra el '
+                f'comprobante electrónico desde el panel de administración de Django.'
+            )
+            return redirect('billing:invoice_detail', pk=invoice.pk)
         messages.success(request, f'Factura #{invoice_id} eliminada y stock restaurado.')
         return redirect('billing:invoice_list')
     return render(request, 'billing/invoice_confirm_delete.html', {'object': invoice})

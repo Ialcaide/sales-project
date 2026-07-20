@@ -14,7 +14,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 
-from shared.notifications import send_credentials_email, get_admin_recipients
+from shared.notifications import send_credentials_email, get_admin_recipients, send_telegram_message
 
 from .models import Notificacion
 
@@ -31,9 +31,16 @@ DIAS_POR_TERMINO = {
 def _crear_si_no_existe(tipo, nivel, mensaje, clave, usuario=None, url=''):
     if Notificacion.objects.filter(clave=clave, leida=False).exists():
         return None
-    return Notificacion.objects.create(
+    notificacion = Notificacion.objects.create(
         tipo=tipo, nivel=nivel, mensaje=mensaje, clave=clave, usuario=usuario, url=url,
     )
+    # Todas las alertas internas (campanita) pasan por acá — es el único
+    # punto de integración necesario para que las 4 (stock bajo, caja,
+    # productos por vencer, pagos pendientes) también lleguen a Telegram,
+    # sin repetir esta llamada en cada función de arriba.
+    texto = f'{mensaje}\n{settings.SITE_URL}{url}' if url else mensaje
+    send_telegram_message(texto)
+    return notificacion
 
 
 def notificar_stock_bajo(product):

@@ -150,6 +150,59 @@ class CobroFacturaFormTests(TestCase):
         )
         self.assertFalse(form.is_valid())
 
+    def test_tarjeta_sin_titular_es_invalido(self):
+        # clean() valida titular/cvv/expiración en orden y corta en la
+        # primera que falle (mismo criterio que InvoiceForm.clean()).
+        form = CobroFacturaForm(
+            data={'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': ''},
+            factura=self.factura,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_titular', form.errors)
+
+    def test_tarjeta_sin_cvv_es_invalido(self):
+        form = CobroFacturaForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Ana Gómez',
+            },
+            factura=self.factura,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_cvv', form.errors)
+
+    def test_tarjeta_sin_expiracion_es_invalido(self):
+        form = CobroFacturaForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Ana Gómez', 'tarjeta_cvv': '456',
+            },
+            factura=self.factura,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_expiracion', form.errors)
+
+    def test_tarjeta_con_todos_los_datos_es_valido(self):
+        form = CobroFacturaForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Ana Gómez', 'tarjeta_cvv': '456', 'tarjeta_expiracion': '2030-01-01',
+            },
+            factura=self.factura,
+        )
+        self.assertTrue(form.is_valid())
+
+    def test_tarjeta_no_exige_monto_recibido(self):
+        form = CobroFacturaForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Ana Gómez', 'tarjeta_cvv': '456', 'tarjeta_expiracion': '2030-01-01',
+            },
+            factura=self.factura,
+        )
+        self.assertTrue(form.is_valid())
+        self.assertIsNone(form.cleaned_data.get('monto_recibido'))
+
 
 class CobroFacturaFechaTests(TestCase):
     """El cobro no puede fecharse antes de que la factura existiera."""
@@ -234,17 +287,19 @@ class CobroFacturaViewTests(TestCase):
         self.assertEqual(self.factura.saldo, Decimal('100.00'))
         self.assertFalse(CobroFactura.objects.filter(factura=self.factura).exists())
 
-    def test_registrar_cobro_ignora_forma_de_pago_enviada_y_siempre_es_efectivo(self):
-        # El formulario manual ya no tiene 'forma_pago' (ver CobroFacturaForm):
-        # es exclusivamente para efectivo. Pagar con PayPal de verdad exige
-        # el flujo real de cobro_paypal_iniciar (CobroPaypalIntegrationTests).
+    def test_registrar_cobro_no_permite_elegir_paypal_en_este_formulario(self):
+        # El formulario manual ahora tiene 'forma_pago' (Efectivo/Tarjeta),
+        # pero PayPal queda excluido de sus choices (ver CobroFacturaForm):
+        # pagar con PayPal de verdad exige el flujo real de
+        # cobro_paypal_iniciar (CobroPaypalIntegrationTests). Postear
+        # 'paypal' acá ya no se ignora silenciosamente, se rechaza.
         url = reverse('cobros:cobro_create', args=[self.factura.pk])
         response = self.client.post(url, {
             'fecha': HOY, 'valor': '100.00', 'forma_pago': 'paypal', 'monto_recibido': '100.00', 'observacion': '',
         })
-        self.assertEqual(response.status_code, 302)
-        cobro = CobroFactura.objects.get(factura=self.factura)
-        self.assertEqual(cobro.forma_pago, CobroFactura.EFECTIVO)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(CobroFactura.objects.filter(factura=self.factura).exists())
+        self.assertIn('forma_pago', response.context['form'].errors)
 
     def test_registrar_cobro_sin_forma_de_pago_usa_efectivo_por_defecto(self):
         url = reverse('cobros:cobro_create', args=[self.factura.pk])
@@ -439,14 +494,46 @@ class CobroFacturaCajaIntegrationTests(TestCase):
         self.assertEqual(movimiento.monto, Decimal('40.00'))
         self.assertEqual(movimiento.cobro_factura, cobro)
 
-    def test_forma_pago_enviada_al_form_manual_se_ignora_y_sigue_exigiendo_caja(self):
-        # El formulario manual ya no acepta 'forma_pago' (ver CobroFacturaForm):
-        # aunque se envíe 'paypal' en el POST, se ignora y el cobro se trata
-        # como efectivo — sigue exigiendo una caja abierta. Pagar con PayPal
-        # de verdad es un flujo aparte (cobro_paypal_iniciar).
+    def test_forma_pago_paypal_enviada_al_form_manual_se_rechaza(self):
+        # 'paypal' no está entre las choices de este formulario (ver
+        # CobroFacturaForm) — el form queda inválido y no llega ni a
+        # revisar la caja. Pagar con PayPal de verdad es un flujo aparte
+        # (cobro_paypal_iniciar).
         response = self._post(valor='40.00', forma_pago='paypal')
         self.assertEqual(response.status_code, 200)
         self.assertFalse(CobroFactura.objects.filter(factura=self.factura).exists())
+
+    def _post_tarjeta(self, valor='40.00'):
+        return self.client.post(reverse('cobros:cobro_create', args=[self.factura.pk]), {
+            'fecha': HOY, 'valor': valor, 'forma_pago': 'tarjeta', 'observacion': '',
+            'tarjeta_titular': 'Ana Gómez', 'tarjeta_cvv': '456', 'tarjeta_expiracion': '2030-01-01',
+        })
+
+    def test_cobro_con_tarjeta_sin_caja_abierta_es_bloqueado(self):
+        response = self._post_tarjeta()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(CobroFactura.objects.filter(factura=self.factura).exists())
+
+    def test_cobro_con_tarjeta_con_caja_abierta_no_crea_movimiento(self):
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
+        response = self._post_tarjeta(valor='40.00')
+        self.assertEqual(response.status_code, 302)
+        cobro = CobroFactura.objects.get(factura=self.factura)
+        self.assertEqual(cobro.forma_pago, CobroFactura.TARJETA)
+        self.assertEqual(cobro.tarjeta_titular, 'Ana Gómez')
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_cobro_en_efectivo_no_guarda_datos_de_tarjeta_aunque_se_envien(self):
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
+        response = self.client.post(reverse('cobros:cobro_create', args=[self.factura.pk]), {
+            'fecha': HOY, 'valor': '40.00', 'forma_pago': 'efectivo', 'monto_recibido': '40.00', 'observacion': '',
+            'tarjeta_titular': 'Ana Gómez', 'tarjeta_cvv': '456', 'tarjeta_expiracion': '2030-01-01',
+        })
+        self.assertEqual(response.status_code, 302)
+        cobro = CobroFactura.objects.get(factura=self.factura)
+        self.assertIsNone(cobro.tarjeta_titular)
+        self.assertIsNone(cobro.tarjeta_cvv)
+        self.assertIsNone(cobro.tarjeta_expiracion)
 
 
 class CobroFacturaCuotaMinimaTests(TestCase):
@@ -557,18 +644,18 @@ class CobroFacturaMontoRecibidoTests(TestCase):
         self.assertEqual(cobro.monto_recibido, Decimal('60.00'))
         self.assertEqual(cobro.cambio, Decimal('10.00'))
 
-    def test_forma_pago_no_es_un_campo_del_formulario(self):
-        # Este form ya no deja elegir 'paypal' a mano: pagar con PayPal de
-        # verdad es un flujo aparte (cobro_paypal_iniciar, que sí cobra).
+    def test_forma_pago_excluye_paypal_de_las_choices(self):
+        # Este form sí tiene 'forma_pago' (Efectivo/Tarjeta), pero nunca deja
+        # elegir 'paypal' a mano: pagar con PayPal de verdad es un flujo
+        # aparte (cobro_paypal_iniciar, que sí cobra).
         form = CobroFacturaForm(
             data={'fecha': HOY, 'valor': '50.00', 'forma_pago': 'paypal', 'observacion': ''},
             factura=self.factura,
         )
-        self.assertNotIn('forma_pago', form.fields)
-        # 'forma_pago': 'paypal' en el POST se ignora — sigue siendo
-        # efectivo y exige monto_recibido.
+        self.assertIn('forma_pago', form.fields)
+        self.assertNotIn(CobroFactura.PAYPAL, dict(form.fields['forma_pago'].choices))
         self.assertFalse(form.is_valid())
-        self.assertIn('monto_recibido', form.errors)
+        self.assertIn('forma_pago', form.errors)
 
     def test_editar_cobro_pagado_por_paypal_no_exige_monto_recibido(self):
         # Un cobro que YA se pagó de verdad por PayPal (creado por

@@ -108,6 +108,14 @@ class MovimientoCaja(models.Model):
         'cobros.CobroFactura', null=True, blank=True, on_delete=models.SET_NULL,
         related_name='movimientos_caja', verbose_name='Cobro de factura relacionado',
     )
+    # Liga el movimiento a una compra al contado que lo generó (compras en
+    # efectivo desde purchasing/views.py -> purchase_create); distinto de
+    # 'pago_compra' (que es un ABONO a una compra a crédito) — una compra al
+    # contado nunca genera un PagoCompra, se paga de una al crearse.
+    purchase = models.ForeignKey(
+        'purchasing.Purchase', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='movimientos_caja', verbose_name='Compra relacionada',
+    )
 
     class Meta:
         verbose_name = 'Movimiento de Caja'

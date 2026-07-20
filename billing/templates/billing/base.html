@@ -92,6 +92,7 @@
           <div class="nav-group-items">
             <a class="nav-item-link{% if request.resolver_match.url_name == 'customer_list' %} active{% endif %}" href="{% url 'billing:customer_list' %}" data-label="Clientes"><i data-lucide="users"></i><span class="nav-item-label">Clientes</span></a>
             <a class="nav-item-link{% if request.resolver_match.url_name == 'invoice_list' %} active{% endif %}" href="{% url 'billing:invoice_list' %}" data-label="Facturas"><i data-lucide="receipt"></i><span class="nav-item-label">Facturas</span></a>
+            <a class="nav-item-link{% if 'prestamo' in request.resolver_match.url_name %} active{% endif %}" href="{% url 'RRHumanos:prestamo_list' %}" data-label="Préstamos"><i data-lucide="coins"></i><span class="nav-item-label">Préstamos</span></a>
             <a class="nav-item-link{% if request.resolver_match.url_name == 'invoice_pending_list' %} active{% endif %}" href="{% url 'cobros:invoice_pending_list' %}" data-label="Cobros a Clientes"><i data-lucide="wallet"></i><span class="nav-item-label">Cobros a Clientes</span></a>
           </div>
         </div>

@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.urls import reverse
 
-from .client import PayPalError, capturar_orden, crear_orden
+from .client import PayPalError, capturar_orden, crear_orden, crear_payout
 from .models import OrdenPaypal
 
 
@@ -70,6 +70,21 @@ def crear_orden_cobro(factura, monto, usuario):
     )
     orden.approval_url = approval_url
     return orden
+
+
+def crear_pago_proveedor(supplier, monto, referencia):
+    """Envía un pago real a un proveedor por PayPal Payouts (dinero
+    SALIENDO del negocio) — a diferencia de crear_orden_venta/
+    crear_orden_cobro, esto se resuelve en esta misma llamada: no hay
+    OrdenPaypal ni paso de aprobación del receptor (Payouts no tiene
+    checkout). Usado tanto por pagos/views.py (pagar a un proveedor)
+    como por purchasing/views.py (compra al contado con forma_pago=PayPal).
+    Deja escapar PayPalError — quien llama decide qué mostrar."""
+    if not supplier.email:
+        raise PayPalError('El proveedor no tiene un correo configurado para recibir pagos por PayPal.')
+    from configuracion.models import ConfiguracionSistema
+    empresa_nombre = ConfiguracionSistema.get_solo().empresa_nombre
+    return crear_payout(monto, referencia, supplier.email, nota=f'Pago de {empresa_nombre} a {supplier.name}')
 
 
 def finalizar_orden(orden_o_order_id):

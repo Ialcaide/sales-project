@@ -1,3 +1,5 @@
+from datetime import date
+
 from django import forms
 from django.core.exceptions import ValidationError
 from .models import CobroFactura
@@ -12,15 +14,16 @@ class CobroFacturaForm(forms.ModelForm):
     """
     class Meta:
         model = CobroFactura
-        # 'forma_pago' NO es un campo de este formulario: este form es
-        # exclusivamente para cobros en EFECTIVO (el modelo lo deja en su
-        # default 'efectivo' al instanciar un CobroFactura nuevo, ver
-        # CobroFactura.forma_pago en cobros/models.py). Pagar con PayPal es
-        # un flujo completamente aparte — ver cobro_paypal_iniciar en
-        # cobros/views.py, que sí cobra de verdad y crea el CobroFactura con
-        # forma_pago=PAYPAL directamente, sin pasar por este formulario. Así
-        # queda una sola forma real de pagar con PayPal, no dos.
-        fields = ['fecha', 'valor', 'monto_recibido', 'observacion']
+        # 'forma_pago' SÍ es un campo de este formulario, pero restringido a
+        # Efectivo/Tarjeta en __init__ más abajo — PayPal sigue sin poder
+        # elegirse acá NUNCA: eso sigue siendo un flujo completamente aparte
+        # (ver cobro_paypal_iniciar en cobros/views.py, que sí cobra de
+        # verdad y crea el CobroFactura con forma_pago=PAYPAL directamente).
+        # Así queda una sola forma real de pagar con PayPal, no dos.
+        fields = [
+            'fecha', 'valor', 'forma_pago', 'monto_recibido', 'observacion',
+            'tarjeta_titular', 'tarjeta_cvv', 'tarjeta_expiracion',
+        ]
         widgets = {
             # format='%Y-%m-%d' fuerza ISO sin importar el locale (es-ec usa
             # dd/mm/aaaa por defecto): un <input type="date"> del navegador
@@ -28,8 +31,19 @@ class CobroFacturaForm(forms.ModelForm):
             # en blanco aunque el dato exista.
             'fecha': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'),
             'valor': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'forma_pago': forms.Select(attrs={'class': 'form-select'}),
             'monto_recibido': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
             'observacion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'tarjeta_titular': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': 'Nombre tal como aparece en la tarjeta',
+            }),
+            'tarjeta_cvv': forms.TextInput(attrs={
+                'class': 'form-control', 'maxlength': 4, 'inputmode': 'numeric', 'placeholder': 'Ej: 123',
+                'autocomplete': 'off',
+            }),
+            'tarjeta_expiracion': forms.DateInput(
+                attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'
+            ),
         }
 
     def __init__(self, *args, factura=None, **kwargs):
@@ -42,6 +56,38 @@ class CobroFacturaForm(forms.ModelForm):
         # ya tenía la instancia), sin importar qué llegue en el POST.
         if self.instance.pk:
             self.fields['fecha'].disabled = True
+            # La forma de pago de un cobro ya registrado no se puede
+            # reclasificar después (afectaría retroactivamente si generó o
+            # no un MovimientoCaja) — disabled=True fuerza a que clean()
+            # siga viendo el valor original sin importar qué llegue en el
+            # POST, igual que ya hacía 'fecha'. Esto también preserva el
+            # comportamiento de siempre para un cobro pagado por PayPal
+            # (forma_pago='paypal' nunca aparece en las choices de abajo,
+            # pero como el campo queda deshabilitado, editar ese cobro no
+            # lo cambia a otra cosa).
+            self.fields['forma_pago'].disabled = True
+        # PayPal NUNCA es una opción ELEGIBLE en este form al crear (se
+        # filtra de las choices en vez de dejar que ModelForm traiga las 3
+        # del modelo) — pero si ya se está EDITANDO un cobro que de hecho
+        # se pagó por PayPal, 'paypal' se deja en las choices (el campo ya
+        # quedó disabled arriba, así que igual no se puede elegir a mano;
+        # esto solo evita que la validación rechace el propio valor ya
+        # guardado en la instancia al volver a limpiarlo en clean()).
+        ya_es_paypal = self.instance.pk and self.instance.forma_pago == CobroFactura.PAYPAL
+        if not ya_es_paypal:
+            self.fields['forma_pago'].choices = [
+                c for c in self.fields['forma_pago'].choices if c[0] != CobroFactura.PAYPAL
+            ]
+        self.fields['forma_pago'].required = False
+        # Los 3 campos de tarjeta solo son obligatorios si forma_pago='tarjeta'
+        # (no se puede expresar eso con required=True fijo) — se valida en
+        # clean() más abajo, igual que billing/forms.py -> InvoiceForm.
+        self.fields['tarjeta_titular'].required = False
+        self.fields['tarjeta_cvv'].required = False
+        self.fields['tarjeta_expiracion'].required = False
+
+    def clean_forma_pago(self):
+        return self.cleaned_data.get('forma_pago') or CobroFactura.EFECTIVO
 
     def clean_valor(self):
         valor = self.cleaned_data.get('valor')
@@ -99,13 +145,15 @@ class CobroFacturaForm(forms.ModelForm):
                     )
                 })
 
+            # forma_pago ya viene de clean_forma_pago() (posteado en un
+            # cobro nuevo, o fijo al valor original si se está editando uno
+            # existente — ver 'forma_pago'.disabled en __init__).
+            forma_pago = cleaned_data.get('forma_pago')
+
             # En efectivo hay que saber cuánto entregó el cliente para
             # calcular el cambio (ver CobroFactura.cambio) — no puede ser
-            # menor al valor que se está cobrando. forma_pago no es un campo
-            # de este form: self.instance.forma_pago ya es 'efectivo' (default
-            # del modelo) para un cobro nuevo, o lo que ya tenía si se está
-            # editando uno pagado por PayPal (ver Meta.fields más arriba).
-            if self.instance.forma_pago == CobroFactura.EFECTIVO:
+            # menor al valor que se está cobrando.
+            if forma_pago == CobroFactura.EFECTIVO:
                 monto_recibido = cleaned_data.get('monto_recibido')
                 if monto_recibido is None:
                     raise ValidationError({
@@ -117,4 +165,24 @@ class CobroFacturaForm(forms.ModelForm):
                     })
             else:
                 cleaned_data['monto_recibido'] = None
+
+            # Captura informativa de tarjeta — no hay pasarela de pago real
+            # (no Stripe ni similar), así que estos 3 campos solo dejan
+            # constancia de que se cobró por un datáfono externo. Nunca se
+            # pide/guarda el número completo de la tarjeta. Mismo criterio
+            # que billing/forms.py -> InvoiceForm.clean().
+            if forma_pago == CobroFactura.TARJETA:
+                titular = cleaned_data.get('tarjeta_titular')
+                cvv = cleaned_data.get('tarjeta_cvv')
+                expira = cleaned_data.get('tarjeta_expiracion')
+                if not titular or not titular.strip():
+                    raise ValidationError({'tarjeta_titular': 'Indica el nombre del titular de la tarjeta.'})
+                if not cvv or not cvv.isdigit() or len(cvv) not in (3, 4):
+                    raise ValidationError({
+                        'tarjeta_cvv': 'Ingresa el CVV/CVC de la tarjeta (3 o 4 números).'
+                    })
+                if not expira:
+                    raise ValidationError({'tarjeta_expiracion': 'Indica la fecha de expiración de la tarjeta.'})
+                elif expira < date.today():
+                    raise ValidationError({'tarjeta_expiracion': 'La tarjeta está vencida.'})
         return cleaned_data

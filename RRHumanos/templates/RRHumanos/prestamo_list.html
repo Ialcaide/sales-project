@@ -1,0 +1,99 @@
+{% extends 'billing/base.html' %}
+{% block title %}Préstamos{% endblock %}
+{% block breadcrumbs %}<span class="current">Préstamos</span>{% endblock %}
+{% block content %}
+
+<div class="list-header">
+  <h2>Gestión de Préstamos</h2>
+  <div class="list-header-actions">
+    <a href="{% url 'RRHumanos:exportar_prestamos_excel' %}{% if request.GET.search %}?search={{ request.GET.search }}{% endif %}" class="btn btn-outline-success"><i data-lucide="file-spreadsheet"></i> Exportar a Excel</a>
+    <a href="{% url 'security:register' %}" class="btn btn-outline-primary" target="_blank"><i data-lucide="user-plus"></i> Crear Empleado</a>
+    <a href="/admin/RRHumanos/tipoprestamo/add/" class="btn btn-outline-secondary" target="_blank"><i data-lucide="circle-plus"></i> Tipo de Préstamo</a>
+    {% if perms.RRHumanos.add_prestamo %}
+      <a href="{% url 'RRHumanos:prestamo_create' %}" class="btn btn-primary"><i data-lucide="circle-plus"></i>Nuevo Préstamo</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="list-toolbar">
+  <form method="get" class="d-flex align-items-center gap-2 flex-wrap w-full">
+    <div class="search-field">
+      <i data-lucide="search"></i>
+      <input type="text" name="search" value="{{ request.GET.search|default:'' }}" class="form-control" placeholder="Buscar por empleado o tipo...">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-lucide="search"></i>Buscar</button>
+    {% if request.GET.search %}
+      <a href="{% url 'RRHumanos:prestamo_list' %}" class="btn btn-ghost">Limpiar</a>
+    {% endif %}
+  </form>
+</div>
+
+{% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="card">
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Empleado</th>
+          <th>Tipo Préstamo</th>
+          <th>Fecha</th>
+          <th>Monto Solicitado</th>
+          <th>Monto a Pagar</th>
+          <th>Saldo Pendiente</th>
+          <th>Cuotas</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in prestamos %}
+        <tr>
+          <td class="text-muted">#{{ item.id }}</td>
+          <td><strong>{{ item.empleado.nombres }}</strong></td>
+          <td>{{ item.tipo_prestamo.descripcion }}</td>
+          <td>{{ item.fecha_prestamo|date:"d/m/Y" }}</td>
+          <td>${{ item.monto }}</td>
+          <td>${{ item.monto_pagar }}</td>
+          <td class="text-semibold">${{ item.saldo }}</td>
+          <td>{{ item.numero_cuotas }}</td>
+          <td>
+            {% if item.estado == 'PEND' %}
+              <span class="badge badge-warning">Pendiente</span>
+            {% elif item.estado == 'PAG' %}
+              <span class="badge badge-success">Pagado</span>
+            {% else %}
+              <span class="badge badge-error">Anulado</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+              {% if perms.RRHumanos.view_prestamo %}
+                <a href="{% url 'RRHumanos:prestamo_detail' item.pk %}" class="row-action-btn" title="Ver Detalles"><i data-lucide="eye"></i></a>
+              {% endif %}
+              {% if item.estado == 'PEND' and perms.RRHumanos.change_prestamo %}
+                <a href="{% url 'RRHumanos:prestamo_update' item.pk %}" class="row-action-btn" title="Editar"><i data-lucide="pencil"></i></a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr class="empty-row">
+          <td colspan="10">No se encontraron préstamos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

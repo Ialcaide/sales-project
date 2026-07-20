@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import Permission, User
 from django.core.exceptions import ValidationError
@@ -8,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from billing.models import Brand, Product, ProductGroup, Supplier
+from caja.models import MovimientoCaja, SesionCaja
 
 from .forms import BodegaQuickCreateForm, PurchaseForm
 from .models import Bodega, Purchase, PurchaseDetail
@@ -20,6 +22,10 @@ class PurchaseMesesCreditoModelTests(TestCase):
     def make(self, **kwargs):
         defaults = dict(supplier=self.supplier, document_number='FAC-1', total=Decimal('100'))
         defaults.update(kwargs)
+        # Al contado, forma_pago es obligatorio (ver Purchase.clean()) — se
+        # asume Efectivo salvo que el test lo pase explícito.
+        if defaults.get('tipo_pago') == Purchase.CONTADO and 'forma_pago' not in kwargs:
+            defaults['forma_pago'] = Purchase.EFECTIVO
         return Purchase(**defaults)
 
     def test_credito_sin_meses_es_invalido(self):
@@ -83,7 +89,7 @@ class PurchaseFormMesesCreditoTests(TestCase):
     def test_form_contado_sin_meses_es_valido(self):
         form = PurchaseForm(data={
             'supplier': self.supplier.id, 'document_number': 'FAC-5',
-            'tipo_pago': Purchase.CONTADO,
+            'tipo_pago': Purchase.CONTADO, 'forma_pago': Purchase.EFECTIVO,
         })
         self.assertTrue(form.is_valid())
 
@@ -176,8 +182,16 @@ class PurchaseCreateViewTests(TestCase):
         )
         self.user.user_permissions.set(perms)
         self.client.force_login(self.user)
+        # Una compra al CONTADO (Efectivo/Tarjeta/PayPal) ahora exige caja
+        # abierta — ver PurchaseCajaIntegrationTests más abajo para el caso
+        # sin caja.
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('500.00'))
 
-    def _post(self, tipo_pago, meses_credito=None, document_number='FAC-E2E'):
+    def _post(self, tipo_pago, meses_credito=None, document_number='FAC-E2E', forma_pago=None, **extra):
+        # Al contado, forma_pago es obligatorio (ver Purchase.clean()) — si
+        # el test no especifica una, se asume Efectivo (el caso más simple).
+        if forma_pago is None and tipo_pago == Purchase.CONTADO:
+            forma_pago = Purchase.EFECTIVO
         data = {
             'supplier': self.supplier.id,
             'document_number': document_number,
@@ -193,6 +207,9 @@ class PurchaseCreateViewTests(TestCase):
         }
         if meses_credito is not None:
             data['meses_credito'] = meses_credito
+        if forma_pago is not None:
+            data['forma_pago'] = forma_pago
+        data.update(extra)
         return self.client.post(reverse('purchasing:purchase_create'), data)
 
     def test_guardar_compra_contado_se_guarda(self):
@@ -201,6 +218,7 @@ class PurchaseCreateViewTests(TestCase):
         purchase = Purchase.objects.get(document_number='FAC-E2E')
         self.assertEqual(purchase.estado, Purchase.PAGADA)
         self.assertEqual(purchase.saldo, Decimal('0.00'))
+        self.assertEqual(purchase.forma_pago, Purchase.EFECTIVO)
 
     def test_guardar_compra_credito_con_meses_se_guarda(self):
         response = self._post(Purchase.CREDITO, meses_credito=4)
@@ -257,6 +275,133 @@ class PurchaseCreateViewTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 0)
         self.assertEqual(self.product.last_cost, Decimal('0.00'))
+
+    def test_contado_sin_forma_de_pago_no_se_guarda(self):
+        response = self._post(Purchase.CONTADO, forma_pago='')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-E2E').exists())
+
+    def test_credito_con_forma_de_pago_no_se_guarda(self):
+        # Una compra a crédito no debe tener forma_pago (ver Purchase.clean()).
+        response = self._post(Purchase.CREDITO, meses_credito=3, forma_pago=Purchase.EFECTIVO)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-E2E').exists())
+
+    def test_tarjeta_sin_titular_es_invalido(self):
+        response = self._post(Purchase.CONTADO, forma_pago=Purchase.TARJETA)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-E2E').exists())
+
+    def test_tarjeta_con_todos_los_datos_se_guarda(self):
+        response = self._post(
+            Purchase.CONTADO, forma_pago=Purchase.TARJETA,
+            **{
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123',
+                'tarjeta_expiracion': '2030-01-01',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        purchase = Purchase.objects.get(document_number='FAC-E2E')
+        self.assertEqual(purchase.forma_pago, Purchase.TARJETA)
+        self.assertEqual(purchase.tarjeta_titular, 'Juan Pérez')
+
+
+class PurchaseCajaIntegrationTests(TestCase):
+    """Una compra al CONTADO (Efectivo/Tarjeta/PayPal) exige caja abierta —
+    mismo criterio espejo que billing (facturas) y pagos (a diferencia de
+    'pagos', donde PayPal no exige caja, acá SÍ la exige, confirmado con
+    el usuario)."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name='Marca Caja')
+        self.group = ProductGroup.objects.create(name='Grupo Caja')
+        self.supplier = Supplier.objects.create(name='Proveedor Caja', email='proveedor@example.com')
+        self.product = Product.objects.create(
+            name='Producto Caja', brand=self.brand, group=self.group,
+            unit_price=Decimal('10'), stock=0,
+        )
+        self.product.suppliers.add(self.supplier)
+        self.user = User.objects.create_user('comprador_caja', password='clave-test-123')
+        self.user.user_permissions.set(Permission.objects.filter(
+            codename__in=['view_purchase', 'add_purchase', 'view_purchasedetail', 'add_purchasedetail']
+        ))
+        self.client.force_login(self.user)
+
+    def _post(self, forma_pago, document_number='FAC-CAJA'):
+        data = {
+            'supplier': self.supplier.id,
+            'document_number': document_number,
+            'tipo_pago': Purchase.CONTADO,
+            'forma_pago': forma_pago,
+            'details-TOTAL_FORMS': '1',
+            'details-INITIAL_FORMS': '0',
+            'details-MIN_NUM_FORMS': '0',
+            'details-MAX_NUM_FORMS': '1000',
+            'details-0-id': '',
+            'details-0-product': self.product.id,
+            'details-0-quantity': '5',
+            'details-0-unit_cost': '10.00',
+        }
+        if forma_pago == Purchase.TARJETA:
+            data.update({
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123', 'tarjeta_expiracion': '2030-01-01',
+            })
+        return self.client.post(reverse('purchasing:purchase_create'), data)
+
+    def test_efectivo_sin_caja_abierta_es_bloqueado(self):
+        response = self._post(Purchase.EFECTIVO)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-CAJA').exists())
+
+    def test_tarjeta_sin_caja_abierta_es_bloqueado(self):
+        response = self._post(Purchase.TARJETA)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-CAJA').exists())
+
+    @patch('purchasing.views.crear_pago_proveedor')
+    def test_paypal_sin_caja_abierta_es_bloqueado(self, mock_crear_pago):
+        response = self._post(Purchase.PAYPAL)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-CAJA').exists())
+        mock_crear_pago.assert_not_called()
+
+    def test_efectivo_con_caja_abierta_crea_egreso(self):
+        sesion = SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('200.00'))
+        response = self._post(Purchase.EFECTIVO)
+        self.assertEqual(response.status_code, 302)
+        purchase = Purchase.objects.get(document_number='FAC-CAJA')
+        self.assertEqual(sesion.movimientos.count(), 1)
+        movimiento = sesion.movimientos.first()
+        self.assertEqual(movimiento.tipo, MovimientoCaja.EGRESO)
+        self.assertEqual(movimiento.monto, purchase.monto_neto_a_pagar)
+        self.assertEqual(movimiento.purchase, purchase)
+
+    def test_tarjeta_con_caja_abierta_no_crea_movimiento(self):
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('200.00'))
+        response = self._post(Purchase.TARJETA)
+        self.assertEqual(response.status_code, 302)
+        purchase = Purchase.objects.get(document_number='FAC-CAJA')
+        self.assertEqual(purchase.forma_pago, Purchase.TARJETA)
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    @patch('purchasing.views.crear_pago_proveedor')
+    def test_paypal_exitoso_con_caja_abierta_guarda_payout_id(self, mock_crear_pago):
+        mock_crear_pago.return_value = ('BATCHPUR1', 'PENDING')
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('200.00'))
+        response = self._post(Purchase.PAYPAL)
+        self.assertEqual(response.status_code, 302)
+        purchase = Purchase.objects.get(document_number='FAC-CAJA')
+        self.assertEqual(purchase.paypal_payout_id, 'BATCHPUR1')
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    @patch('purchasing.views.crear_pago_proveedor')
+    def test_paypal_fallido_no_guarda_nada(self, mock_crear_pago):
+        from paypal_pagos.client import PayPalError
+        mock_crear_pago.side_effect = PayPalError('PayPal no responde')
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('200.00'))
+        response = self._post(Purchase.PAYPAL)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Purchase.objects.filter(document_number='FAC-CAJA').exists())
 
 
 class BodegaModelTests(TestCase):
@@ -417,7 +562,8 @@ class PurchaseFormRetencionRangeTests(TestCase):
     def _form(self, retencion):
         return PurchaseForm(data={
             'supplier': self.supplier.id, 'document_number': 'FAC-RET',
-            'tipo_pago': Purchase.CONTADO, 'retencion_porcentaje': retencion,
+            'tipo_pago': Purchase.CONTADO, 'forma_pago': Purchase.EFECTIVO,
+            'retencion_porcentaje': retencion,
         })
 
     def test_retencion_negativa_es_invalida(self):
@@ -494,12 +640,14 @@ class PurchaseFechaEntregaEstimadaAutomaticaTests(TestCase):
             name='Producto Test', brand=self.brand, group=self.group,
             unit_price=Decimal('10'), stock=0,
         )
+        self.product.suppliers.add(self.supplier)
         self.user = User.objects.create_user('comprador_fecha', password='clave-test-123')
         perms = Permission.objects.filter(
             codename__in=['view_purchase', 'add_purchase', 'view_purchasedetail', 'add_purchasedetail']
         )
         self.user.user_permissions.set(perms)
         self.client.force_login(self.user)
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('200.00'))
 
     def test_fecha_entrega_estimada_es_24h_despues_de_la_compra(self):
         purchase = Purchase.objects.create(
@@ -516,6 +664,7 @@ class PurchaseFechaEntregaEstimadaAutomaticaTests(TestCase):
             'supplier': self.supplier.id,
             'document_number': 'FAC-ETA-3',
             'tipo_pago': Purchase.CONTADO,
+            'forma_pago': Purchase.EFECTIVO,
             'details-TOTAL_FORMS': '1',
             'details-INITIAL_FORMS': '0',
             'details-MIN_NUM_FORMS': '0',

@@ -200,19 +200,21 @@ def cobro_create(request, factura_id):
     if request.method == 'POST':
         form = CobroFacturaForm(request.POST, factura=factura)
         if form.is_valid():
-            # Este formulario manual es exclusivamente para EFECTIVO (pagar
-            # con PayPal usa el botón de más abajo -> cobro_paypal_iniciar,
-            # que sí cobra de verdad) — entra físicamente a la caja del
-            # usuario, así que exige una SesionCaja abierta, mismo criterio
-            # espejo que billing/views.py -> invoice_create y
-            # pagos/views.py -> pago_create.
+            forma_pago = form.cleaned_data.get('forma_pago')
+            # Este formulario manual es para EFECTIVO/TARJETA (pagar con
+            # PayPal usa el botón de más abajo -> cobro_paypal_iniciar, que
+            # sí cobra de verdad) — ambas exigen una SesionCaja abierta,
+            # mismo criterio espejo que billing/views.py -> invoice_create y
+            # pagos/views.py -> pago_create. Solo EFECTIVO crea
+            # MovimientoCaja: con tarjeta el dinero no entra físicamente a
+            # la caja, va a un datáfono externo.
             sesion_caja = SesionCaja.objects.filter(
                 usuario=request.user, estado=SesionCaja.ABIERTA
             ).first()
             if not sesion_caja:
                 messages.error(
                     request,
-                    'Debes abrir una caja antes de registrar un cobro en efectivo.'
+                    'Debes abrir una caja antes de registrar un cobro en efectivo o tarjeta.'
                 )
                 return render(request, 'cobros/cobro_form.html', {
                     'form': form, 'factura': factura, 'title': 'Registrar Cobro',
@@ -221,14 +223,20 @@ def cobro_create(request, factura_id):
 
             cobro = form.save(commit=False)
             cobro.factura = factura
+            # Igual que pagos/views.py -> pago_create: evita que quede una
+            # constancia de tarjeta "fantasma" si se llenó y después se
+            # cambió la forma de pago antes de enviar.
+            if forma_pago != CobroFactura.TARJETA:
+                cobro.tarjeta_titular = cobro.tarjeta_cvv = cobro.tarjeta_expiracion = None
             try:
                 with transaction.atomic():
                     cobro.save()
-                    MovimientoCaja.objects.create(
-                        sesion=sesion_caja, tipo=MovimientoCaja.INGRESO, monto=cobro.valor,
-                        concepto=f'Cobro factura #{factura.id:04d} - {factura.customer}',
-                        cobro_factura=cobro,
-                    )
+                    if forma_pago == CobroFactura.EFECTIVO:
+                        MovimientoCaja.objects.create(
+                            sesion=sesion_caja, tipo=MovimientoCaja.INGRESO, monto=cobro.valor,
+                            concepto=f'Cobro factura #{factura.id:04d} - {factura.customer}',
+                            cobro_factura=cobro,
+                        )
             except ValidationError as e:
                 messages.error(request, ' '.join(e.messages))
             else:

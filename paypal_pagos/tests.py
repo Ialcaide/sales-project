@@ -5,12 +5,12 @@ from django.contrib.auth.models import Permission, User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from billing.models import Brand, Customer, Invoice, Product, ProductGroup
+from billing.models import Brand, Customer, Invoice, Product, ProductGroup, Supplier
 from cobros.models import CobroFactura
 
-from .client import PayPalError, PayPalNoConfiguradoError, capturar_orden, crear_orden, obtener_access_token
+from .client import PayPalError, PayPalNoConfiguradoError, capturar_orden, crear_orden, crear_payout, obtener_access_token
 from .models import OrdenPaypal
-from .services import crear_orden_cobro, crear_orden_venta, finalizar_orden
+from .services import crear_orden_cobro, crear_orden_venta, crear_pago_proveedor, finalizar_orden
 
 PAYPAL_SETTINGS = dict(PAYPAL_CLIENT_ID='fake-id', PAYPAL_CLIENT_SECRET='fake-secret', PAYPAL_WEBHOOK_ID='fake-webhook-id')
 
@@ -79,6 +79,29 @@ class ClientTests(TestCase):
         from .client import verificar_firma_webhook
         self.assertFalse(verificar_firma_webhook({}, {}))
 
+    @patch('paypal_pagos.client.requests.post')
+    def test_crear_payout_devuelve_batch_id_y_status(self, mock_post):
+        mock_post.side_effect = [
+            mock_response({'access_token': 'tok123'}),
+            mock_response({'batch_header': {'payout_batch_id': 'BATCH1', 'batch_status': 'PENDING'}}),
+        ]
+        batch_id, status = crear_payout(Decimal('50.00'), 'ref1', 'proveedor@example.com')
+        self.assertEqual(batch_id, 'BATCH1')
+        self.assertEqual(status, 'PENDING')
+
+    def test_crear_payout_sin_email_lanza_error(self):
+        with self.assertRaises(PayPalError):
+            crear_payout(Decimal('50.00'), 'ref1', '')
+
+    @patch('paypal_pagos.client.requests.post')
+    def test_crear_payout_sin_batch_id_lanza_error(self, mock_post):
+        mock_post.side_effect = [
+            mock_response({'access_token': 'tok123'}),
+            mock_response({'batch_header': {}}),
+        ]
+        with self.assertRaises(PayPalError):
+            crear_payout(Decimal('50.00'), 'ref1', 'proveedor@example.com')
+
 
 @override_settings(**PAYPAL_SETTINGS)
 class ServicesTests(TestCase):
@@ -118,6 +141,21 @@ class ServicesTests(TestCase):
         self.assertEqual(orden.tipo, OrdenPaypal.COBRO)
         self.assertEqual(orden.monto, Decimal('20.00'))
         self.assertEqual(orden.payload, {'factura_id': invoice.id})
+
+    @patch('paypal_pagos.services.crear_payout')
+    def test_crear_pago_proveedor_envia_el_payout(self, mock_crear_payout):
+        mock_crear_payout.return_value = ('BATCH1', 'PENDING')
+        supplier = Supplier.objects.create(name='Proveedor PP', email='proveedor@example.com')
+        batch_id, status = crear_pago_proveedor(supplier, Decimal('40.00'), 'ref-pago-1')
+        self.assertEqual(batch_id, 'BATCH1')
+        self.assertEqual(status, 'PENDING')
+        mock_crear_payout.assert_called_once()
+        self.assertEqual(mock_crear_payout.call_args[0][2], 'proveedor@example.com')
+
+    def test_crear_pago_proveedor_sin_email_lanza_error(self):
+        supplier = Supplier.objects.create(name='Proveedor Sin Correo')
+        with self.assertRaises(PayPalError):
+            crear_pago_proveedor(supplier, Decimal('40.00'), 'ref-pago-2')
 
     @patch('paypal_pagos.services.capturar_orden')
     def test_finalizar_orden_venta_crea_invoice_y_baja_stock(self, mock_capturar):

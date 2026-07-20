@@ -88,7 +88,7 @@
             <p class="small text-danger mb-0">{{ comprobante.mensajes|last }}</p>
           {% endif %}
           {% if comprobante.ambiente != comprobante.AMBIENTE_PRODUCCION %}
-            <p class="form-text mb-0">La consulta pública del SRI solo indexa comprobantes de ambiente Producción — usa "Descargar RIDE" para ver este.</p>
+            <p class="form-text mb-0">Este comprobante es de ambiente Pruebas — usa "Consultar en el SRI (Pruebas)" para verificarlo, no el portal público de Producción.</p>
           {% endif %}
         {% else %}
           <p class="text-muted small mb-0">Todavía no se generó un comprobante electrónico para esta factura.</p>
@@ -185,8 +185,15 @@
       {% if comprobante %}
         <a href="{% url 'facturacion_electronica:comprobante_ride_pdf' comprobante.pk %}" class="btn btn-secondary" target="_blank"><i data-lucide="file-text"></i>Descargar RIDE</a>
         <a href="{% url 'facturacion_electronica:comprobante_xml_download' comprobante.pk %}" class="btn btn-secondary"><i data-lucide="file-code"></i>Descargar XML</a>
+        {# Botón "Enviar por WhatsApp" oculto a propósito: el endpoint que usa
+        (enviar_ride_whatsapp en facturacion_electronica/services.py) todavía
+        no existe en el microservicio de facturación electrónica — es un
+        proyecto aparte que no se ha empezado. La vista/función siguen
+        intactas, solo se ocultó el botón para no prometer algo roto. #}
         {% if comprobante.ambiente == comprobante.AMBIENTE_PRODUCCION %}
           <a href="https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet/publico/validezComprobantes.jsf" class="btn btn-secondary" target="_blank" rel="noopener"><i data-lucide="external-link"></i>Consultar en el SRI</a>
+        {% else %}
+          <a href="https://srienlinea.sri.gob.ec/comprobantes-electronicos-internet-pruebas/pages/consultas/menu.jsf" class="btn btn-secondary" target="_blank" rel="noopener"><i data-lucide="external-link"></i>Consultar en el SRI (Pruebas)</a>
         {% endif %}
         {% if comprobante.estado == 'enviado' or comprobante.estado == 'recibida' or comprobante.estado == 'en_proceso' %}
           <a href="{% url 'facturacion_electronica:comprobante_consultar_autorizacion' comprobante.pk %}" class="btn btn-secondary"><i data-lucide="rotate-cw"></i>Consultar Autorización</a>
@@ -207,9 +214,7 @@
   {% if invoice.is_active and perms.devoluciones.add_devolucionventa %}
   <a href="{% url 'devoluciones:devolucion_create' invoice.pk %}" class="btn btn-outline-danger"><i data-lucide="corner-down-left"></i>Devolución</a>
   {% endif %}
-  {% if perms.billing.delete_invoice %}
-  <a href="{% url 'billing:invoice_delete' invoice.pk %}" class="btn btn-danger"><i data-lucide="trash-2"></i>Eliminar</a>
-  {% endif %}
+
 </div>
 
 {% endblock %}

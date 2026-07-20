@@ -1,6 +1,7 @@
 import logging
 from datetime import date
 
+import requests
 from django.conf import settings
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
@@ -129,25 +130,67 @@ def send_email_with_attachments(to_email, subject, body, attachments, html_templ
 
 
 def send_whatsapp_message(phone, body):
-    """Envía un mensaje de WhatsApp vía Twilio. Devuelve True/False según el resultado.
+    """Envía un mensaje de WhatsApp vía Ultramsg (llamando al microservicio sri_facturacion_service).
+    Devuelve True/False según el resultado.
 
-    Si TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM no están configurados, no falla:
-    registra un aviso y retorna False para que el resto del flujo continúe.
+    Si el microservicio no está configurado o falla, no se lanza excepción para no interrumpir
+    el flujo principal del sistema (comportamiento de tipo best-effort).
     """
     if not phone:
         return False
-    if not (settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_WHATSAPP_FROM):
-        logger.warning('Twilio no está configurado: se omitió el envío de WhatsApp a %s', phone)
+    from configuracion.models import EmpresaFacturacionElectronica
+    empresa = EmpresaFacturacionElectronica.get_activa()
+    api_key = empresa.api_key if empresa else ''
+    service_url = getattr(settings, 'FACTURACION_ELECTRONICA_SERVICE_URL', None)
+    if not (service_url and api_key):
+        logger.warning('El servicio de facturación no está configurado: se omitió el envío de WhatsApp a %s', phone)
         return False
     try:
-        from twilio.rest import Client
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        client.messages.create(
-            from_=settings.TWILIO_WHATSAPP_FROM,
-            to=f'whatsapp:{phone}',
-            body=body,
-        )
-        return True
+        url = f'{service_url.rstrip("/")}/enviar-mensaje-whatsapp'
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}',
+        }
+        payload = {
+            'telefono': phone,
+            'texto': body
+        }
+        timeout = getattr(settings, 'FACTURACION_ELECTRONICA_SERVICE_TIMEOUT', 15)
+        response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        if response.status_code == 200:
+            return True
+        else:
+            logger.error('Error al enviar WhatsApp vía microservicio: %s (status=%d)', response.text, response.status_code)
+            return False
     except Exception:
         logger.exception('No se pudo enviar el WhatsApp a %s', phone)
+        return False
+
+
+
+def send_telegram_message(body):
+    """Envía un mensaje a un único chat/canal de Telegram (el de los
+    administradores, configurado una sola vez en TELEGRAM_CHAT_ID) vía la
+    API de bots de Telegram. A diferencia de send_whatsapp_message, no
+    recibe un destinatario por parámetro: Telegram no permite mandarle un
+    mensaje a una persona sin que ella le haya escrito antes al bot, así que
+    este proyecto usa un solo chat fijo (grupo o chat personal del/los
+    administradores) en vez de vincular un chat por usuario.
+
+    Si TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID no están configurados, no falla:
+    registra un aviso y retorna False para que el resto del flujo continúe
+    (mismo criterio "best effort" que el resto de este archivo)."""
+    if not (settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID):
+        logger.warning('Telegram no está configurado: se omitió el envío del mensaje.')
+        return False
+    try:
+        response = requests.post(
+            f'https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage',
+            json={'chat_id': settings.TELEGRAM_CHAT_ID, 'text': body},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return True
+    except Exception:
+        logger.exception('No se pudo enviar el mensaje de Telegram.')
         return False

@@ -41,7 +41,12 @@ clases del design system.
       </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" id="purchase-form" class="wizard-layout">
+    {# novalidate: la validación automática del navegador bloquea el submit
+       sin ningún aviso visible cuando el campo required inválido está en
+       otro paso del wizard (display:none) — no se lo puede enfocar. La
+       validación real corre a mano en purchase-wizard.js (evento submit),
+       que sí sabe saltar al paso correcto antes de reportar el error. #}
+    <form method="post" enctype="multipart/form-data" id="purchase-form" class="wizard-layout" novalidate>
       {% csrf_token %}
       {{ formset.management_form }}
 
@@ -55,6 +60,41 @@ clases del design system.
       <div>
         <!-- PASO 1: PROVEEDOR Y DATOS DE LA COMPRA -->
         <div class="wizard-step animate-fade-in" data-step="1">
+          {% if productos_reposicion_urgente %}
+          <div class="card mb-4">
+            <div class="card-header card-header-warning">
+              <span class="icon-text"><i data-lucide="triangle-alert" class="icon-sm"></i>Reposición Urgente ({{ productos_reposicion_urgente|length }})</span>
+            </div>
+            <div class="card-body">
+              <p class="text-muted small mb-3">
+                Productos con stock igual o por debajo del mínimo, de todos los proveedores — hacé clic en un
+                proveedor para preseleccionarlo abajo.
+              </p>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr><th>Producto</th><th>Stock</th><th>Proveedores</th></tr>
+                  </thead>
+                  <tbody>
+                    {% for producto in productos_reposicion_urgente %}
+                    <tr>
+                      <td>{{ producto.name }}</td>
+                      <td><span class="badge bg-danger">{{ producto.stock }} / mín. {{ producto.stock_minimo }}</span></td>
+                      <td>
+                        {% for proveedor in producto.suppliers.all %}
+                          <button type="button" class="btn btn-sm btn-outline-primary reposicion-supplier-btn" data-supplier-id="{{ proveedor.id }}">{{ proveedor.name }}</button>
+                        {% empty %}
+                          <span class="text-muted small">Sin proveedor activo registrado</span>
+                        {% endfor %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          {% endif %}
           <div class="card mb-4">
             <div class="card-header card-header-muted">Proveedor</div>
             <div class="card-body">
@@ -150,7 +190,7 @@ clases del design system.
                           <select name="{{ detail_form.product.html_name }}" class="form-select product-select">
                             <option value="">Buscar producto...</option>
                             {% for p in detail_form.product.field.queryset %}
-                              <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>
+                              <option value="{{ p.id }}" {% if detail_form.product.value == p.id|stringformat:"s" %}selected{% endif %} {% if p.stock <= p.stock_minimo %}data-low-stock="true"{% endif %}>{{ p.name }} — Stock: {{ p.stock }}</option>
                             {% endfor %}
                           </select>
                           <small class="text-muted product-meta d-block"></small>
@@ -212,7 +252,104 @@ clases del design system.
                     <div class="text-danger small">{{ error }}</div>
                   {% endfor %}
                 </div>
+                <div class="col-md-6 {% if form.tipo_pago.value == 'credito' %}d-none-force{% endif %}" id="forma-pago-wrapper">
+                  <label class="form-label">Forma de Pago</label>
+                  {{ form.forma_pago }}
+                  <div class="form-text">Efectivo y Tarjeta exigen tener una caja abierta. PayPal paga de verdad al proveedor y también exige caja abierta.</div>
+                  {% for error in form.forma_pago.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                  {% endfor %}
+                </div>
               </div>
+
+              <div class="mb-3 mt-3 {% if not form.tarjeta_titular.errors and not form.tarjeta_cvv.errors and not form.tarjeta_expiracion.errors %}d-none-force{% endif %}" id="tarjeta-wrapper">
+                <div class="row g-4">
+                  <div class="col-md-6">
+                    <label class="form-label">Número de tarjeta</label>
+                    {% comment %}
+                      Solo visual: sin atributo "name", nunca se envía al servidor.
+                      Alimenta la animación de la derecha y detecta la marca
+                      (Visa/Mastercard/Amex/etc.) por su prefijo.
+                    {% endcomment %}
+                    <input type="text" id="cc-number-input" class="form-control" inputmode="numeric"
+                           autocomplete="off" maxlength="23" placeholder="•••• •••• •••• ••••">
+                    <div class="cc-brand-hint" id="cc-brand-hint"></div>
+
+                    <label class="form-label mt-3">Titular de la tarjeta</label>
+                    {{ form.tarjeta_titular }}
+                    {% for error in form.tarjeta_titular.errors %}
+                      <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+
+                    <div class="row g-2 mt-1">
+                      <div class="col-md-6">
+                        <label class="form-label">CVV/CVC</label>
+                        {{ form.tarjeta_cvv }}
+                        {% for error in form.tarjeta_cvv.errors %}
+                          <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label">Fecha de expiración</label>
+                        {{ form.tarjeta_expiracion }}
+                        {% for error in form.tarjeta_expiracion.errors %}
+                          <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                    <div class="info-box mt-2">Pago informativo — no se procesa ninguna tarjeta real, solo se registra que se pagó por un datáfono externo.</div>
+                    <div class="d-flex align-items-center gap-2 mt-3">
+                      <button type="button" class="btn btn-primary" id="tarjeta-pagar-btn"><i data-lucide="lock"></i>Pagar</button>
+                      <span class="badge badge-warning" id="tarjeta-pago-estado">Pago pendiente</span>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="cc-wrapper">
+                      <div class="cc-flip-card" id="cc-flip-card">
+                        <div class="cc-flip-card-inner">
+                          <div class="cc-flip-card-front">
+                            <span class="cc-heading">TARJETA<span class="cc-heading-brand" id="cc-heading-brand"></span></span>
+                            <div class="cc-chip"></div>
+                            <span class="cc-contactless"></span>
+                            <div class="cc-number" id="cc-display-number">•••• •••• •••• ••••</div>
+                            <div class="cc-sub-row">
+                              <span class="cc-name" id="cc-display-name">NOMBRE DEL TITULAR</span>
+                              <span class="cc-expiry-block">VÁLIDO HASTA<br><span class="cc-expiry-value" id="cc-display-expiry">MM/AA</span></span>
+                            </div>
+                            <div class="cc-logo" id="cc-logo">
+                              <span class="cc-logo-visa">VISA</span>
+                              <span class="cc-logo-mastercard">
+                                <svg viewBox="0 0 48 48" width="36" height="22">
+                                  <path fill="#ff9800" d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"></path>
+                                  <path fill="#d50000" d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"></path>
+                                  <path fill="#ff3d00" d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"></path>
+                                </svg>
+                              </span>
+                              <span class="cc-logo-amex">AMEX</span>
+                              <span class="cc-logo-discover">DISCOVER</span>
+                              <span class="cc-logo-diners">DINERS</span>
+                              <span class="cc-logo-jcb">JCB</span>
+                              <span class="cc-logo-generic">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                              </span>
+                            </div>
+                          </div>
+                          <div class="cc-flip-card-back">
+                            <div class="cc-strip"></div>
+                            <div class="cc-strip-row">
+                              <div class="cc-mstrip"></div>
+                              <div class="cc-sstrip"><span class="cc-code" id="cc-display-cvv">•••</span></div>
+                            </div>
+                            <div class="cc-back-hint">Pago informativo — sin procesamiento real</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="d-flex justify-content-between align-items-center mt-3 p-3 info-panel">
                 <span class="fw-bold">Neto a pagar al proveedor</span>
                 <span id="step3-neto-recap" class="fw-bold text-success fs-5">$0.00</span>
@@ -221,7 +358,7 @@ clases del design system.
           </div>
           <div class="d-flex justify-content-between gap-2 wizard-step-footer">
             <button type="button" class="btn btn-secondary" data-wizard-back="2"><i data-lucide="arrow-left"></i>Atrás</button>
-            <button type="submit" class="btn btn-warning">Guardar Compra</button>
+            <button type="submit" class="btn btn-warning" id="guardar-compra-btn">Guardar Compra</button>
           </div>
         </div>
       </div>
@@ -299,6 +436,44 @@ clases del design system.
         </div>
       </aside>
     </form>
+  </div>
+</div>
+
+<!-- Pasarela de pago simulada: se muestra recién al tocar "Guardar Compra"
+     cuando la forma de pago es tarjeta — mismo criterio que
+     billing/templates/billing/invoice_form.html: 100% simulado, no hay
+     ninguna pasarela externa integrada. PayPal acá NO usa este modal (no
+     tiene redirect, se resuelve en el mismo submit — ver purchase-wizard.js). -->
+<div class="modal fade" id="pasarelaPagoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="credit-card" class="icon-md icon-primary"></i>Pasarela de Pago</h5>
+      </div>
+      <div class="modal-body">
+        <div id="pasarela-resumen">
+          <p class="mb-2">Total a pagar: <span id="pasarela-total" class="fw-bold">$0.00</span></p>
+          <p class="mb-1 text-muted small">Tarjeta: <span id="pasarela-numero">•••• •••• •••• ••••</span></p>
+          <p class="mb-0 text-muted small">Titular: <span id="pasarela-titular">-</span></p>
+          <div id="pasarela-error" class="mt-2 small text-danger fw-bold d-none-force"></div>
+        </div>
+        <div id="pasarela-procesando" class="d-none-force text-center py-3">
+          <i data-lucide="loader-2" class="icon-lg icon-primary spin"></i>
+          <p class="mt-2 mb-0 fw-bold">Procesando pago...</p>
+          <p class="text-muted small mb-0">No cierres ni recargues esta ventana.</p>
+        </div>
+        <div id="pasarela-aprobado" class="d-none-force text-center py-3">
+          <i data-lucide="check-circle" class="icon-lg icon-success"></i>
+          <p class="mt-2 mb-0 fw-bold text-success">Pago Aprobado</p>
+          <p class="text-muted small mb-0">Guardando la compra...</p>
+        </div>
+        <div class="info-box mt-3">Simulación — no se procesa ningún cobro real, ninguna pasarela externa está integrada.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="pasarela-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="pasarela-pagar"><i data-lucide="lock"></i>Pagar ahora</button>
+      </div>
+    </div>
   </div>
 </div>
 

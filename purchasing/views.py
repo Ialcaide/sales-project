@@ -8,7 +8,10 @@ from django.utils import timezone
 from decimal import Decimal
 from billing.models import Product
 from billing.export_mixins import ExportMixin
+from caja.models import MovimientoCaja, SesionCaja
 from configuracion.models import ConfiguracionSistema
+from paypal_pagos.client import PayPalError
+from paypal_pagos.services import crear_pago_proveedor
 from shared.decorators import permission_required_redirect
 from shared.notifications import send_credentials_email, get_admin_recipients
 from shared.pagination import build_extra_qs, get_page_range
@@ -130,9 +133,11 @@ def purchase_create(request):
             last_prices[key] = float(d.unit_cost)
 
     # suppliers_products: qué productos vende cada proveedor, a qué último
-    # costo global, código de barras, imagen y último precio pagado A ESE
-    # proveedor puntual — en JSON para que el JavaScript del template
-    # autocomplete/filtre el <select> de productos sin recargar la página.
+    # costo global, código de barras, imagen, último precio pagado A ESE
+    # proveedor puntual, y stock/stock_minimo (para mostrarlo junto al
+    # nombre y resaltar los productos con stock bajo en el selector) — en
+    # JSON para que el JavaScript del template autocomplete/filtre el
+    # <select> de productos sin recargar la página.
     suppliers_products = {}
     for supplier in Supplier.objects.filter(is_active=True):
         suppliers_products[supplier.id] = [
@@ -143,9 +148,23 @@ def purchase_create(request):
                 'barcode': p.barcode or '',
                 'image_url': p.image.url if p.image else p.placeholder_image,
                 'last_price': last_prices.get((supplier.id, p.id)),
+                'stock': p.stock,
+                'stock_minimo': p.stock_minimo,
             }
             for p in supplier.products.filter(is_active=True)
         ]
+
+    # productos_reposicion_urgente: productos con stock <= stock_minimo, de
+    # CUALQUIER proveedor (no solo el elegido en el paso 1) — se listan en
+    # el wizard con sus proveedores habituales para agilizar la compra. Se
+    # prefetchean solo los proveedores ACTIVOS: no tiene sentido ofrecer un
+    # botón "comprarle a X" si X ya no está activo.
+    from django.db.models import F, Prefetch
+    productos_reposicion_urgente = Product.objects.filter(
+        is_active=True, stock__lte=F('stock_minimo')
+    ).prefetch_related(
+        Prefetch('suppliers', queryset=Supplier.objects.filter(is_active=True))
+    ).order_by('stock')
 
     config = ConfiguracionSistema.get_solo()
     context_base = {
@@ -153,6 +172,7 @@ def purchase_create(request):
         'suppliers_products_json': json.dumps(suppliers_products),
         'iva_fraccion_json': json.dumps(float(config.iva_fraccion)),
         'retencion_porcentaje_default_json': json.dumps(float(config.retencion_porcentaje_default)),
+        'productos_reposicion_urgente': productos_reposicion_urgente,
     }
 
     if request.method == 'POST':
@@ -182,7 +202,12 @@ def purchase_create(request):
                     **context_base, 'form': form, 'formset': formset
                 })
 
-            # Validar duplicados, cantidad y costo
+            # Validar duplicados, que cada producto pertenezca al proveedor
+            # elegido, cantidad y costo. El filtro por proveedor en el <select>
+            # (purchase-wizard.js) es solo visual — el <select> renderizado
+            # trae TODOS los productos activos, así que sin este chequeo el
+            # servidor guardaría cualquier combinación producto/proveedor.
+            supplier_product_ids = set(supplier.products.values_list('id', flat=True)) if supplier else set()
             productos_ids = []
             for detail_form in formset.forms:
                 if detail_form.cleaned_data and not detail_form.cleaned_data.get('DELETE'):
@@ -196,6 +221,15 @@ def purchase_create(request):
                                 **context_base, 'form': form, 'formset': formset
                             })
                         productos_ids.append(product.id)
+                        if product.id not in supplier_product_ids:
+                            messages.error(
+                                request,
+                                f'"{product.name}" no está registrado como producto de "{supplier.name}" — '
+                                f'agrégalo primero a sus proveedores, o elige otro producto.'
+                            )
+                            return render(request, 'purchasing/purchase_form.html', {
+                                **context_base, 'form': form, 'formset': formset
+                            })
                         if quantity <= 0:
                             messages.error(request, f'La cantidad de "{product.name}" debe ser mayor a 0.')
                             return render(request, 'purchasing/purchase_form.html', {
@@ -207,6 +241,57 @@ def purchase_create(request):
                                 **context_base, 'form': form, 'formset': formset
                             })
 
+            # EFECTIVO, TARJETA y PAYPAL (compras al CONTADO) exigen caja
+            # abierta del usuario — a diferencia de "pagos" (abonos a
+            # compras a crédito), donde PayPal no la exige, en "compras" las
+            # 3 formas de pago la piden (confirmado con el usuario). Nada de
+            # esto aplica a CREDITO, que no tiene forma_pago (ver
+            # Purchase.clean()).
+            forma_pago = form.cleaned_data.get('forma_pago')
+            sesion_caja = None
+            paypal_payout_id = None
+            if form.cleaned_data.get('tipo_pago') == Purchase.CONTADO:
+                sesion_caja = SesionCaja.objects.filter(
+                    usuario=request.user, estado=SesionCaja.ABIERTA
+                ).first()
+                if not sesion_caja:
+                    messages.error(request, 'Debes abrir una caja antes de registrar una compra al contado.')
+                    return render(request, 'purchasing/purchase_form.html', {
+                        **context_base, 'form': form, 'formset': formset
+                    })
+
+                if forma_pago == Purchase.PAYPAL:
+                    # PAYPAL acá es un pago REAL (Payouts, dinero saliendo al
+                    # proveedor) — igual que billing nunca crea la Invoice
+                    # hasta que el pago está resuelto, acá no se guarda NADA
+                    # de la compra si el payout falla. El monto se calcula
+                    # desde las líneas ya validadas, SIN guardar todavía el
+                    # Purchase (mismo criterio que invoice_create calcula
+                    # proyectado_total antes de decidir el camino de PayPal).
+                    subtotal_prospectivo = sum(
+                        (f.cleaned_data['quantity'] * f.cleaned_data['unit_cost']
+                         * (1 - (f.cleaned_data.get('descuento_porcentaje') or Decimal('0')) / Decimal('100')))
+                        for f in productos_validos
+                    ).quantize(Decimal('0.01'))
+                    tax_prospectivo = (subtotal_prospectivo * config.iva_fraccion).quantize(Decimal('0.01'))
+                    total_prospectivo = subtotal_prospectivo + tax_prospectivo
+                    retencion_valor_prospectivo = (
+                        subtotal_prospectivo * (form.cleaned_data.get('retencion_porcentaje') or Decimal('0'))
+                        / Decimal('100')
+                    ).quantize(Decimal('0.01'))
+                    monto_neto_prospectivo = total_prospectivo - retencion_valor_prospectivo
+
+                    referencia = f'compra-{supplier.id}-{timezone.now():%Y%m%d%H%M%S%f}'
+                    try:
+                        paypal_payout_id, _status = crear_pago_proveedor(
+                            supplier, monto_neto_prospectivo, referencia,
+                        )
+                    except PayPalError as e:
+                        messages.error(request, str(e))
+                        return render(request, 'purchasing/purchase_form.html', {
+                            **context_base, 'form': form, 'formset': formset
+                        })
+
             # Guardar: mismo patrón que invoice_create en billing/views.py
             # (commit=False -> guardar cabecera -> asociar formset -> guardar
             # líneas -> recién ahí calcular totales). A diferencia de antes,
@@ -216,6 +301,11 @@ def purchase_create(request):
             # verdad (ver ese view más abajo).
             try:
                 purchase = form.save(commit=False)
+                # Los campos de tarjeta solo se guardan si de verdad se pagó
+                # con tarjeta (mismo criterio que billing/pagos/cobros).
+                if forma_pago != Purchase.TARJETA:
+                    purchase.tarjeta_titular = purchase.tarjeta_cvv = purchase.tarjeta_expiracion = None
+                purchase.paypal_payout_id = paypal_payout_id
                 purchase.save()
                 formset.instance = purchase
                 formset.save()
@@ -241,6 +331,17 @@ def purchase_create(request):
                     purchase.subtotal * purchase.retencion_porcentaje / Decimal('100')
                 ).quantize(Decimal('0.01'))
                 purchase.save()
+
+                # Solo EFECTIVO genera un MovimientoCaja EGRESO real — con
+                # tarjeta el dinero no sale físicamente de la caja (va a un
+                # datáfono externo), y con PayPal ya salió por Payouts, no
+                # por la caja (mismo criterio que billing/pagos).
+                if forma_pago == Purchase.EFECTIVO and sesion_caja:
+                    MovimientoCaja.objects.create(
+                        sesion=sesion_caja, tipo=MovimientoCaja.EGRESO, monto=purchase.monto_neto_a_pagar,
+                        concepto=f'Compra #{purchase.id:04d} - {purchase.supplier.name}',
+                        purchase=purchase,
+                    )
 
                 # Aviso a los administradores (evento nuevo, no existía antes
                 # ningún correo para esto) — "best effort", nunca bloquea el

@@ -157,6 +157,72 @@ class PagoCompraFormTests(TestCase):
         )
         self.assertTrue(form.is_valid())
 
+    def test_tarjeta_sin_titular_es_invalido(self):
+        # clean() valida titular/cvv/expiración en orden y corta en la
+        # primera que falle (mismo criterio que InvoiceForm.clean()) — acá
+        # se prueba la primera (titular); los otros 2 casos se prueban
+        # llenando el titular y fallando el siguiente campo.
+        form = PagoCompraForm(
+            data={'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': ''},
+            compra=self.compra,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_titular', form.errors)
+
+    def test_tarjeta_sin_cvv_es_invalido(self):
+        form = PagoCompraForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Juan Pérez',
+            },
+            compra=self.compra,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_cvv', form.errors)
+
+    def test_tarjeta_sin_expiracion_es_invalido(self):
+        form = PagoCompraForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123',
+            },
+            compra=self.compra,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_expiracion', form.errors)
+
+    def test_tarjeta_con_cvv_invalido_es_invalido(self):
+        form = PagoCompraForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '12', 'tarjeta_expiracion': '2030-01-01',
+            },
+            compra=self.compra,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_cvv', form.errors)
+
+    def test_tarjeta_vencida_es_invalida(self):
+        form = PagoCompraForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123', 'tarjeta_expiracion': '2000-01-01',
+            },
+            compra=self.compra,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('tarjeta_expiracion', form.errors)
+
+    def test_tarjeta_con_todos_los_datos_es_valido(self):
+        form = PagoCompraForm(
+            data={
+                'fecha': HOY, 'valor': '50.00', 'forma_pago': 'tarjeta', 'observacion': '',
+                'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123', 'tarjeta_expiracion': '2030-01-01',
+            },
+            compra=self.compra,
+        )
+        self.assertTrue(form.is_valid())
+
 
 class PagoCompraFechaTests(TestCase):
     """La fecha del pago debe estar entre la fecha de la compra y su plazo de crédito."""
@@ -228,12 +294,15 @@ class PagoCompraViewTests(TestCase):
         self.assertEqual(self.compra.saldo, Decimal('100.00'))
         self.assertFalse(PagoCompra.objects.filter(compra=self.compra).exists())
 
-    def test_registrar_pago_guarda_la_forma_de_pago_elegida(self):
+    @patch('pagos.views.crear_pago_proveedor')
+    def test_registrar_pago_guarda_la_forma_de_pago_elegida(self, mock_crear_pago):
+        mock_crear_pago.return_value = ('PAYOUTBATCH1', 'SUCCESS')
         url = reverse('pagos:pago_create', args=[self.compra.pk])
         response = self.client.post(url, {'fecha': HOY, 'valor': '100.00', 'forma_pago': 'paypal', 'observacion': ''})
         self.assertEqual(response.status_code, 302)
         pago = PagoCompra.objects.get(compra=self.compra)
         self.assertEqual(pago.forma_pago, PagoCompra.PAYPAL)
+        self.assertEqual(pago.paypal_payout_id, 'PAYOUTBATCH1')
 
     def test_registrar_pago_sin_forma_de_pago_usa_efectivo_por_defecto(self):
         url = reverse('pagos:pago_create', args=[self.compra.pk])
@@ -335,8 +404,43 @@ class PagoCompraCajaIntegrationTests(TestCase):
         self.assertEqual(movimiento.pago_compra, pago)
         self.assertIn(self.compra.supplier.name, movimiento.concepto)
 
-    def test_pago_con_paypal_no_requiere_caja_ni_crea_movimiento(self):
+    @patch('pagos.views.crear_pago_proveedor')
+    def test_pago_con_paypal_no_requiere_caja_ni_crea_movimiento(self, mock_crear_pago):
+        mock_crear_pago.return_value = ('PAYOUTBATCH2', 'SUCCESS')
         response = self._post(valor='40.00', forma_pago='paypal')
         self.assertEqual(response.status_code, 302)
         self.assertTrue(PagoCompra.objects.filter(compra=self.compra).exists())
         self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def _post_tarjeta(self, valor='40.00'):
+        return self.client.post(reverse('pagos:pago_create', args=[self.compra.pk]), {
+            'fecha': HOY, 'valor': valor, 'forma_pago': 'tarjeta', 'observacion': '',
+            'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123', 'tarjeta_expiracion': '2030-01-01',
+        })
+
+    def test_pago_con_tarjeta_sin_caja_abierta_es_bloqueado(self):
+        response = self._post_tarjeta()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PagoCompra.objects.filter(compra=self.compra).exists())
+
+    def test_pago_con_tarjeta_con_caja_abierta_no_crea_movimiento(self):
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
+        response = self._post_tarjeta(valor='40.00')
+        self.assertEqual(response.status_code, 302)
+        pago = PagoCompra.objects.get(compra=self.compra)
+        self.assertEqual(pago.forma_pago, PagoCompra.TARJETA)
+        self.assertEqual(pago.tarjeta_titular, 'Juan Pérez')
+        self.assertEqual(pago.tarjeta_cvv, '123')
+        self.assertEqual(MovimientoCaja.objects.count(), 0)
+
+    def test_pago_en_efectivo_no_guarda_datos_de_tarjeta_aunque_se_envien(self):
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
+        response = self.client.post(reverse('pagos:pago_create', args=[self.compra.pk]), {
+            'fecha': HOY, 'valor': '40.00', 'forma_pago': 'efectivo', 'observacion': '',
+            'tarjeta_titular': 'Juan Pérez', 'tarjeta_cvv': '123', 'tarjeta_expiracion': '2030-01-01',
+        })
+        self.assertEqual(response.status_code, 302)
+        pago = PagoCompra.objects.get(compra=self.compra)
+        self.assertIsNone(pago.tarjeta_titular)
+        self.assertIsNone(pago.tarjeta_cvv)
+        self.assertIsNone(pago.tarjeta_expiracion)

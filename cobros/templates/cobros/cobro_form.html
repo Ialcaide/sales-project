@@ -3,7 +3,7 @@
 {% block content %}
 
 <div class="row justify-content-center">
-  <div class="col-md-6">
+  <div class="col-md-9">
     <div class="card mb-4">
       <div class="card-header card-header-accent">{{ title }}</div>
       <div class="card-body">
@@ -65,13 +65,112 @@
             {% endfor %}
           </div>
 
+          <div class="mb-3" id="forma-pago-wrapper">
+            <label class="form-label">Forma de Pago</label>
+            {{ form.forma_pago }}
+            {% if cobro %}
+              <div class="form-text">La forma de pago de un cobro ya registrado no se puede cambiar.</div>
+            {% endif %}
+            {% for error in form.forma_pago.errors %}
+              <div class="text-danger small">{{ error }}</div>
+            {% endfor %}
+          </div>
+
           <div class="mb-3 {% if not form.monto_recibido.errors %}d-none-force{% endif %}" id="monto-recibido-wrapper">
             <label class="form-label">Monto recibido del cliente</label>
             {{ form.monto_recibido }}
-            <div class="form-text">Se pide al tocar "Registrar Cobro en Efectivo".</div>
+            <div class="form-text">Se pide al tocar "Registrar Cobro" si la forma de pago es efectivo.</div>
             {% for error in form.monto_recibido.errors %}
               <div class="text-danger small">{{ error }}</div>
             {% endfor %}
+          </div>
+
+          <div class="mb-3 {% if not form.tarjeta_titular.errors and not form.tarjeta_cvv.errors and not form.tarjeta_expiracion.errors %}d-none-force{% endif %}" id="tarjeta-wrapper">
+            <div class="row g-4">
+              <div class="col-md-6">
+                <label class="form-label">Número de tarjeta</label>
+                {% comment %}
+                  Solo visual: sin atributo "name", nunca se envía al servidor.
+                  Alimenta la animación de la derecha y detecta la marca
+                  (Visa/Mastercard/Amex/etc.) por su prefijo.
+                {% endcomment %}
+                <input type="text" id="cc-number-input" class="form-control" inputmode="numeric"
+                       autocomplete="off" maxlength="23" placeholder="•••• •••• •••• ••••">
+                <div class="cc-brand-hint" id="cc-brand-hint"></div>
+
+                <label class="form-label mt-3">Titular de la tarjeta</label>
+                {{ form.tarjeta_titular }}
+                {% for error in form.tarjeta_titular.errors %}
+                  <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+
+                <div class="row g-2 mt-1">
+                  <div class="col-md-6">
+                    <label class="form-label">CVV/CVC</label>
+                    {{ form.tarjeta_cvv }}
+                    {% for error in form.tarjeta_cvv.errors %}
+                      <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Fecha de expiración</label>
+                    {{ form.tarjeta_expiracion }}
+                    {% for error in form.tarjeta_expiracion.errors %}
+                      <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="info-box mt-2">Pago informativo — no se procesa ninguna tarjeta real, solo se registra que se cobró por un datáfono externo.</div>
+                <div class="d-flex align-items-center gap-2 mt-3">
+                  <button type="button" class="btn btn-primary" id="tarjeta-pagar-btn"><i data-lucide="lock"></i>Pagar</button>
+                  <span class="badge badge-warning" id="tarjeta-pago-estado">Pago pendiente</span>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="cc-wrapper">
+                  <div class="cc-flip-card" id="cc-flip-card">
+                    <div class="cc-flip-card-inner">
+                      <div class="cc-flip-card-front">
+                        <span class="cc-heading">TARJETA<span class="cc-heading-brand" id="cc-heading-brand"></span></span>
+                        <div class="cc-chip"></div>
+                        <span class="cc-contactless"></span>
+                        <div class="cc-number" id="cc-display-number">•••• •••• •••• ••••</div>
+                        <div class="cc-sub-row">
+                          <span class="cc-name" id="cc-display-name">NOMBRE DEL TITULAR</span>
+                          <span class="cc-expiry-block">VÁLIDO HASTA<br><span class="cc-expiry-value" id="cc-display-expiry">MM/AA</span></span>
+                        </div>
+                        <div class="cc-logo" id="cc-logo">
+                          <span class="cc-logo-visa">VISA</span>
+                          <span class="cc-logo-mastercard">
+                            <svg viewBox="0 0 48 48" width="36" height="22">
+                              <path fill="#ff9800" d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"></path>
+                              <path fill="#d50000" d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"></path>
+                              <path fill="#ff3d00" d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"></path>
+                            </svg>
+                          </span>
+                          <span class="cc-logo-amex">AMEX</span>
+                          <span class="cc-logo-discover">DISCOVER</span>
+                          <span class="cc-logo-diners">DINERS</span>
+                          <span class="cc-logo-jcb">JCB</span>
+                          <span class="cc-logo-generic">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="cc-flip-card-back">
+                        <div class="cc-strip"></div>
+                        <div class="cc-strip-row">
+                          <div class="cc-mstrip"></div>
+                          <div class="cc-sstrip"><span class="cc-code" id="cc-display-cvv">•••</span></div>
+                        </div>
+                        <div class="cc-back-hint">Pago informativo — sin procesamiento real</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="mb-3">
@@ -84,7 +183,7 @@
 
           <div class="d-flex justify-content-end gap-2">
             <a href="{% url 'cobros:invoice_pending_list' %}" class="btn btn-secondary">Cancelar</a>
-            <button type="submit" class="btn btn-primary"><i data-lucide="coins"></i>Registrar Cobro en Efectivo</button>
+            <button type="submit" class="btn btn-primary" id="guardar-cobro-btn"><i data-lucide="coins"></i>Registrar Cobro</button>
           </div>
         </form>
 
@@ -130,12 +229,53 @@
   </div>
 </div>
 
+<!-- Pasarela de pago simulada: se muestra recién al tocar "Registrar Cobro"
+     cuando la forma de pago es tarjeta — mismo criterio que
+     billing/templates/billing/invoice_form.html: 100% simulado, no hay
+     ninguna pasarela externa integrada. -->
+<div class="modal fade" id="pasarelaPagoModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title icon-text"><i data-lucide="credit-card" class="icon-md icon-primary"></i>Pasarela de Pago</h5>
+      </div>
+      <div class="modal-body">
+        <div id="pasarela-resumen">
+          <p class="mb-2">Total a cobrar: <span id="pasarela-total" class="fw-bold">$0.00</span></p>
+          <p class="mb-1 text-muted small">Tarjeta: <span id="pasarela-numero">•••• •••• •••• ••••</span></p>
+          <p class="mb-0 text-muted small">Titular: <span id="pasarela-titular">-</span></p>
+          <div id="pasarela-error" class="mt-2 small text-danger fw-bold d-none-force"></div>
+        </div>
+        <div id="pasarela-procesando" class="d-none-force text-center py-3">
+          <i data-lucide="loader-2" class="icon-lg icon-primary spin"></i>
+          <p class="mt-2 mb-0 fw-bold">Procesando pago...</p>
+          <p class="text-muted small mb-0">No cierres ni recargues esta ventana.</p>
+        </div>
+        <div id="pasarela-aprobado" class="d-none-force text-center py-3">
+          <i data-lucide="check-circle" class="icon-lg icon-success"></i>
+          <p class="mt-2 mb-0 fw-bold text-success">Pago Aprobado</p>
+          <p class="text-muted small mb-0">Guardando el cobro...</p>
+        </div>
+        <div class="info-box mt-3">Simulación — no se procesa ningún cobro real, ninguna pasarela externa está integrada.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="pasarela-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="pasarela-pagar"><i data-lucide="lock"></i>Pagar ahora</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-// Este formulario ahora es exclusivamente para EFECTIVO (pagar con PayPal
-// usa el botón real de arriba) — salvo que se esté editando un cobro que
-// ya se pagó por PayPal (cobro.forma_pago == 'paypal'), caso en el que no
-// corresponde pedir monto recibido/cambio.
-const esCobroEfectivo = {% if not cobro or cobro.forma_pago == 'efectivo' %}true{% else %}false{% endif %};
+// Este formulario maneja EFECTIVO y TARJETA (pagar con PayPal sigue siendo
+// el botón real de arriba, un <form> completamente aparte). Al editar un
+// cobro ya existente, 'forma_pago' queda deshabilitado (ver
+// CobroFacturaForm.__init__) — el <select> igual refleja el valor real
+// guardado, así que leerlo en vivo sigue siendo correcto tanto al crear
+// como al editar.
+const formaPagoSelectCobro = document.getElementById('id_forma_pago');
+const montoRecibidoWrapperCobro = document.getElementById('monto-recibido-wrapper');
+const tarjetaWrapperCobro = document.getElementById('tarjeta-wrapper');
 const montoRecibidoInputCobro = document.getElementById('id_monto_recibido');
 const valorInputCobro = document.getElementById('id_valor');
 const cobroForm = document.getElementById('cobro-form');
@@ -145,6 +285,36 @@ const modalTotalCobro = document.getElementById('modal-total-cobro');
 const modalMontoInputCobro = document.getElementById('modal-monto-input-cobro');
 const modalFeedbackCobro = document.getElementById('modal-feedback-cobro');
 let montoConfirmadoCobro = false;
+let tarjetaConfirmadaCobro = false;
+
+function toggleFormaPagoCobro() {
+  const esEfectivo = formaPagoSelectCobro.value === 'efectivo';
+  const esTarjeta = formaPagoSelectCobro.value === 'tarjeta';
+  montoRecibidoWrapperCobro.classList.toggle('d-none-force', !esEfectivo);
+  tarjetaWrapperCobro.classList.toggle('d-none-force', !esTarjeta);
+  montoConfirmadoCobro = false;
+  tarjetaConfirmadaCobro = false;
+  actualizarEstadoPagoTarjetaCobro();
+}
+formaPagoSelectCobro.addEventListener('change', toggleFormaPagoCobro);
+
+const guardarCobroBtn = document.getElementById('guardar-cobro-btn');
+const tarjetaPagoEstadoCobro = document.getElementById('tarjeta-pago-estado');
+
+function actualizarEstadoPagoTarjetaCobro() {
+  if (formaPagoSelectCobro.value !== 'tarjeta') {
+    guardarCobroBtn.disabled = false;
+    return;
+  }
+  guardarCobroBtn.disabled = !tarjetaConfirmadaCobro;
+  if (tarjetaConfirmadaCobro) {
+    tarjetaPagoEstadoCobro.textContent = 'Pago verificado';
+    tarjetaPagoEstadoCobro.className = 'badge badge-success';
+  } else {
+    tarjetaPagoEstadoCobro.textContent = 'Pago pendiente';
+    tarjetaPagoEstadoCobro.className = 'badge badge-warning';
+  }
+}
 
 valorInputCobro.addEventListener('input', function() { montoConfirmadoCobro = false; });
 
@@ -182,15 +352,188 @@ document.getElementById('modal-cancelar-cobro').addEventListener('click', functi
   montoModalCobro.hide();
 });
 
+/* ---------- Tarjeta animada (preview visual + detección de marca) ----------
+   Copiado/adaptado de static/js/invoice-wizard.js — mismo patrón que ya usa
+   facturas y pagos a proveedores. */
+const ccNumberInputCobro = document.getElementById('cc-number-input');
+const ccFlipCardCobro = document.getElementById('cc-flip-card');
+const ccDisplayNumberCobro = document.getElementById('cc-display-number');
+const ccDisplayNameCobro = document.getElementById('cc-display-name');
+const ccDisplayExpiryCobro = document.getElementById('cc-display-expiry');
+const ccDisplayCvvCobro = document.getElementById('cc-display-cvv');
+const ccBrandHintCobro = document.getElementById('cc-brand-hint');
+const ccHeadingBrandCobro = document.getElementById('cc-heading-brand');
+const tarjetaTitularInputCobro = document.getElementById('id_tarjeta_titular');
+const tarjetaCvvInputCobro = document.getElementById('id_tarjeta_cvv');
+const tarjetaExpiracionInputCobro = document.getElementById('id_tarjeta_expiracion');
+
+if (ccNumberInputCobro && ccFlipCardCobro) {
+  const CARD_BRANDS_COBRO = [
+    { id: 'amex', label: 'American Express', groups: [4, 6, 5], re: /^3[47]/ },
+    { id: 'diners', label: 'Diners Club', groups: [4, 6, 4], re: /^3(?:0[0-5]|[68])/ },
+    { id: 'visa', label: 'Visa', groups: [4, 4, 4, 4], re: /^4/ },
+    { id: 'mastercard', label: 'Mastercard', groups: [4, 4, 4, 4], re: /^(5[1-5]|2(2[2-9][1-9]|2[3-9]\d|[3-6]\d{2}|7[01]\d|720))/ },
+    { id: 'discover', label: 'Discover', groups: [4, 4, 4, 4], re: /^(6011|65|64[4-9]|622)/ },
+    { id: 'jcb', label: 'JCB', groups: [4, 4, 4, 4], re: /^35(?:2[89]|[3-8]\d)/ },
+  ];
+
+  function detectBrandCobro(digits) {
+    for (let i = 0; i < CARD_BRANDS_COBRO.length; i++) {
+      if (CARD_BRANDS_COBRO[i].re.test(digits)) return CARD_BRANDS_COBRO[i];
+    }
+    return null;
+  }
+
+  function groupDigitsCobro(digits, groups) {
+    const parts = [];
+    let pos = 0;
+    for (let i = 0; i < groups.length && pos < digits.length; i++) {
+      parts.push(digits.slice(pos, pos + groups[i]));
+      pos += groups[i];
+    }
+    return parts;
+  }
+
+  function formatCardInputCobro(digits, groups) {
+    return groupDigitsCobro(digits, groups).join(' ');
+  }
+
+  function maskedDisplayCobro(digits, groups) {
+    if (!digits) return '•••• •••• •••• ••••';
+    const masked = digits.length <= 4 ? digits : '•'.repeat(digits.length - 4) + digits.slice(-4);
+    return formatCardInputCobro(masked, groups);
+  }
+
+  function updateCardCobro() {
+    const raw = ccNumberInputCobro.value.replace(/\D/g, '').slice(0, 19);
+    const brand = detectBrandCobro(raw);
+    const groups = brand ? brand.groups : [4, 4, 4, 4];
+
+    ccNumberInputCobro.value = formatCardInputCobro(raw, groups);
+    ccDisplayNumberCobro.textContent = maskedDisplayCobro(raw, groups);
+
+    if (brand) {
+      ccFlipCardCobro.setAttribute('data-brand', brand.id);
+      ccBrandHintCobro.textContent = 'Tarjeta detectada: ' + brand.label;
+      ccHeadingBrandCobro.textContent = brand.label;
+    } else if (raw.length > 0) {
+      ccFlipCardCobro.setAttribute('data-brand', 'unknown');
+      ccBrandHintCobro.textContent = '';
+      ccHeadingBrandCobro.textContent = '';
+    } else {
+      ccFlipCardCobro.removeAttribute('data-brand');
+      ccBrandHintCobro.textContent = '';
+      ccHeadingBrandCobro.textContent = '';
+    }
+  }
+  ccNumberInputCobro.addEventListener('input', updateCardCobro);
+
+  if (tarjetaTitularInputCobro) {
+    tarjetaTitularInputCobro.addEventListener('input', function () {
+      ccDisplayNameCobro.textContent = tarjetaTitularInputCobro.value.trim().toUpperCase() || 'NOMBRE DEL TITULAR';
+    });
+  }
+
+  if (tarjetaExpiracionInputCobro) {
+    tarjetaExpiracionInputCobro.addEventListener('input', function () {
+      if (!tarjetaExpiracionInputCobro.value) { ccDisplayExpiryCobro.textContent = 'MM/AA'; return; }
+      const parts = tarjetaExpiracionInputCobro.value.split('-');
+      if (parts.length === 3) { ccDisplayExpiryCobro.textContent = parts[1] + '/' + parts[0].slice(2); }
+    });
+  }
+
+  if (tarjetaCvvInputCobro && ccDisplayCvvCobro) {
+    tarjetaCvvInputCobro.addEventListener('input', function () {
+      const digits = tarjetaCvvInputCobro.value.replace(/\D/g, '').slice(0, 4);
+      ccDisplayCvvCobro.textContent = digits || '•••';
+    });
+  }
+}
+
+/* ---------- Pasarela de pago simulada (pago con tarjeta) ---------- */
+const pasarelaModalCobroEl = document.getElementById('pasarelaPagoModal');
+const pasarelaModalCobro = new bootstrap.Modal(pasarelaModalCobroEl);
+const pasarelaTotalCobro = document.getElementById('pasarela-total');
+const pasarelaNumeroCobro = document.getElementById('pasarela-numero');
+const pasarelaTitularSpanCobro = document.getElementById('pasarela-titular');
+const pasarelaResumenCobro = document.getElementById('pasarela-resumen');
+const pasarelaProcesandoCobro = document.getElementById('pasarela-procesando');
+const pasarelaAprobadoCobro = document.getElementById('pasarela-aprobado');
+const pasarelaErrorCobro = document.getElementById('pasarela-error');
+const pasarelaPagarBtnCobro = document.getElementById('pasarela-pagar');
+const pasarelaCancelarBtnCobro = document.getElementById('pasarela-cancelar');
+const tarjetaPagarBtnCobro = document.getElementById('tarjeta-pagar-btn');
+
+function mostrarPasoPasarelaCobro(paso) {
+  pasarelaResumenCobro.classList.toggle('d-none-force', paso !== 'resumen');
+  pasarelaProcesandoCobro.classList.toggle('d-none-force', paso !== 'procesando');
+  pasarelaAprobadoCobro.classList.toggle('d-none-force', paso !== 'aprobado');
+  const enResumen = paso === 'resumen';
+  pasarelaPagarBtnCobro.classList.toggle('d-none-force', !enResumen);
+  pasarelaCancelarBtnCobro.classList.toggle('d-none-force', !enResumen);
+}
+
+function abrirPasarelaModalCobro() {
+  pasarelaTotalCobro.textContent = '$' + (parseFloat(valorInputCobro.value) || 0).toFixed(2);
+  pasarelaNumeroCobro.textContent = ccDisplayNumberCobro ? ccDisplayNumberCobro.textContent : '•••• •••• •••• ••••';
+  pasarelaTitularSpanCobro.textContent = tarjetaTitularInputCobro.value.trim() || '-';
+  pasarelaErrorCobro.classList.add('d-none-force');
+  mostrarPasoPasarelaCobro('resumen');
+  pasarelaModalCobro.show();
+}
+
+tarjetaPagarBtnCobro.addEventListener('click', abrirPasarelaModalCobro);
+
+pasarelaPagarBtnCobro.addEventListener('click', function () {
+  const cvv = tarjetaCvvInputCobro.value.trim();
+  if (!tarjetaTitularInputCobro.value.trim()) {
+    pasarelaErrorCobro.textContent = 'Indica el titular de la tarjeta.';
+    pasarelaErrorCobro.classList.remove('d-none-force');
+    return;
+  }
+  if (!/^\d{3,4}$/.test(cvv)) {
+    pasarelaErrorCobro.textContent = 'Ingresa un CVV/CVC válido (3 o 4 números).';
+    pasarelaErrorCobro.classList.remove('d-none-force');
+    return;
+  }
+  if (!tarjetaExpiracionInputCobro.value) {
+    pasarelaErrorCobro.textContent = 'Indica la fecha de expiración de la tarjeta.';
+    pasarelaErrorCobro.classList.remove('d-none-force');
+    return;
+  }
+  pasarelaErrorCobro.classList.add('d-none-force');
+  mostrarPasoPasarelaCobro('procesando');
+  window.setTimeout(function () {
+    mostrarPasoPasarelaCobro('aprobado');
+    window.setTimeout(function () {
+      tarjetaConfirmadaCobro = true;
+      actualizarEstadoPagoTarjetaCobro();
+      pasarelaModalCobro.hide();
+    }, 900);
+  }, 1500);
+});
+
+pasarelaCancelarBtnCobro.addEventListener('click', function () {
+  pasarelaModalCobro.hide();
+});
+
 cobroForm.addEventListener('submit', function(e) {
-  if (esCobroEfectivo && !montoConfirmadoCobro) {
+  if (formaPagoSelectCobro.value === 'efectivo' && !montoConfirmadoCobro) {
     e.preventDefault();
     modalTotalCobro.textContent = '$' + (parseFloat(valorInputCobro.value) || 0).toFixed(2);
     modalMontoInputCobro.value = montoRecibidoInputCobro.value || '';
     actualizarFeedbackModalCobro();
     montoModalCobro.show();
+  } else if (formaPagoSelectCobro.value === 'tarjeta' && !tarjetaConfirmadaCobro) {
+    // Salvaguarda: si el submit llega por otra vía que no sea el click en
+    // "Registrar Cobro" (ej. Enter dentro de un campo de texto), igual se
+    // corta acá y se obliga a pasar por la pasarela.
+    e.preventDefault();
+    abrirPasarelaModalCobro();
   }
 });
+
+toggleFormaPagoCobro();
 </script>
 
 {% endblock %}

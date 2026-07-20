@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django import forms
@@ -38,6 +39,7 @@ class PurchaseForm(forms.ModelForm):
         fields = [
             'supplier', 'document_number', 'tipo_pago', 'meses_credito',
             'bodega', 'factura_adjunta', 'retencion_porcentaje',
+            'forma_pago', 'tarjeta_titular', 'tarjeta_cvv', 'tarjeta_expiracion',
         ]
         widgets = {
             'supplier': forms.Select(attrs={'class': 'form-select'}),
@@ -50,6 +52,17 @@ class PurchaseForm(forms.ModelForm):
             'bodega': forms.Select(attrs={'class': 'form-select'}),
             'factura_adjunta': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.pdf,.xml,image/*'}),
             'retencion_porcentaje': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '100', 'step': '0.01'}),
+            'forma_pago': forms.Select(attrs={'class': 'form-select'}),
+            'tarjeta_titular': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': 'Nombre tal como aparece en la tarjeta',
+            }),
+            'tarjeta_cvv': forms.TextInput(attrs={
+                'class': 'form-control', 'maxlength': 4, 'inputmode': 'numeric', 'placeholder': 'Ej: 123',
+                'autocomplete': 'off',
+            }),
+            'tarjeta_expiracion': forms.DateInput(
+                attrs={'class': 'form-control', 'type': 'date'}, format='%Y-%m-%d'
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -58,6 +71,22 @@ class PurchaseForm(forms.ModelForm):
         self.fields['bodega'].required = False
         self.fields['factura_adjunta'].required = False
         self.fields['retencion_porcentaje'].required = False
+        # forma_pago es obligatorio solo para compras al CONTADO — eso se
+        # exige en Purchase.clean() (modelo), no acá, mismo criterio que
+        # billing.Invoice. Los 3 campos de tarjeta solo son obligatorios si
+        # forma_pago='tarjeta' (se valida en clean() de abajo).
+        self.fields['forma_pago'].required = False
+        self.fields['tarjeta_titular'].required = False
+        self.fields['tarjeta_cvv'].required = False
+        self.fields['tarjeta_expiracion'].required = False
+        # PayPal solo se ofrece como forma de pago si está configurado
+        # (PAYPAL_CLIENT_ID/SECRET en el .env) — mismo criterio que
+        # billing/forms.py -> InvoiceForm.__init__.
+        from django.conf import settings
+        if not (settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET):
+            self.fields['forma_pago'].choices = [
+                c for c in self.fields['forma_pago'].choices if c[0] != Purchase.PAYPAL
+            ]
         # Solo sugiere el % configurado (ConfiguracionSistema) en compras
         # NUEVAS — al editar una existente se respeta el valor que ya tiene.
         if not self.instance.pk:
@@ -74,6 +103,29 @@ class PurchaseForm(forms.ModelForm):
         if valor is not None and not (Decimal('0') <= valor <= Decimal('100')):
             raise forms.ValidationError('La retención debe estar entre 0% y 100%.')
         return valor
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # Captura informativa de tarjeta — no hay pasarela de pago real (no
+        # Stripe ni similar), así que estos 3 campos solo dejan constancia
+        # de que se pagó por un datáfono externo. Nunca se pide/guarda el
+        # número completo de la tarjeta. Mismo criterio que
+        # billing/forms.py -> InvoiceForm.clean().
+        if cleaned_data.get('forma_pago') == Purchase.TARJETA:
+            titular = cleaned_data.get('tarjeta_titular')
+            cvv = cleaned_data.get('tarjeta_cvv')
+            expira = cleaned_data.get('tarjeta_expiracion')
+            if not titular or not titular.strip():
+                raise forms.ValidationError({'tarjeta_titular': 'Indica el nombre del titular de la tarjeta.'})
+            if not cvv or not cvv.isdigit() or len(cvv) not in (3, 4):
+                raise forms.ValidationError({
+                    'tarjeta_cvv': 'Ingresa el CVV/CVC de la tarjeta (3 o 4 números).'
+                })
+            if not expira:
+                raise forms.ValidationError({'tarjeta_expiracion': 'Indica la fecha de expiración de la tarjeta.'})
+            elif expira < date.today():
+                raise forms.ValidationError({'tarjeta_expiracion': 'La tarjeta está vencida.'})
+        return cleaned_data
 
 
 # product/quantity/unit_cost se declaran a mano (en vez de dejar que
@@ -108,6 +160,16 @@ class PurchaseDetailForm(forms.ModelForm):
     class Meta:
         model = PurchaseDetail
         fields = ['product', 'quantity', 'unit_cost', 'descuento_porcentaje']
+
+    def has_changed(self):
+        # Si no se seleccionó producto en el formulario enviado, asumimos que no ha cambiado
+        # para que Django ignore esta fila vacía del formset al validar y guardar.
+        if not self.data:
+            return super().has_changed()
+        if not self.data.get(self.add_prefix('product')):
+            return False
+        return super().has_changed()
+
 
 
 PurchaseDetailFormSet = inlineformset_factory(

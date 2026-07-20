@@ -1,0 +1,166 @@
+{% extends 'billing/base.html' %}
+{% block title %}Detalle de Préstamo #{{ prestamo.id }}{% endblock %}
+{% block breadcrumbs %}
+  <a href="{% url 'RRHumanos:prestamo_list' %}">Préstamos</a>
+  <span class="separator">/</span>
+  <span class="current">Detalle #{{ prestamo.id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="list-header mb-4">
+  <h2>Préstamo #{{ prestamo.id }}</h2>
+  <div class="list-header-actions">
+    <a href="{% url 'RRHumanos:exportar_cronograma_pdf' prestamo.id %}" class="btn btn-outline-danger btn-sm"><i data-lucide="file-text"></i> Descargar Cronograma (PDF)</a>
+    <a href="{% url 'RRHumanos:prestamo_list' %}" class="btn btn-outline-secondary btn-sm"><i data-lucide="arrow-left"></i> Volver al Listado</a>
+    
+    {% if prestamo.estado == 'PEND' and prestamo.saldo == prestamo.monto_pagar and perms.RRHumanos.change_prestamo %}
+      <a href="{% url 'RRHumanos:prestamo_update' prestamo.pk %}" class="btn btn-outline-secondary btn-sm"><i data-lucide="pencil"></i> Editar</a>
+      <form method="post" action="{% url 'RRHumanos:prestamo_anular' prestamo.pk %}" class="d-inline" onsubmit="return confirm('¿Estás seguro de que deseas anular este préstamo?');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger btn-sm"><i data-lucide="ban"></i> Anular Préstamo</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Tarjeta Empleado & Estado -->
+  <div class="col-md-4">
+    <div class="card p-4">
+      <h5 class="mb-3">Información del Empleado</h5>
+      <p class="mb-1"><strong>Nombres:</strong> {{ prestamo.empleado.nombres }}</p>
+      <p class="mb-1"><strong>Sueldo Mensual:</strong> ${{ prestamo.empleado.sueldo }}</p>
+      <p class="mb-1"><strong>Ingreso:</strong> {{ prestamo.empleado.fecha_ingreso|date:"d/m/Y" }}</p>
+      {% if prestamo.empleado.fecha_fin_contrato %}
+        <p class="mb-1"><strong>Fin Contrato:</strong> {{ prestamo.empleado.fecha_fin_contrato|date:"d/m/Y" }}</p>
+      {% else %}
+        <p class="mb-1"><strong>Contrato:</strong> Indefinido</p>
+      {% endif %}
+      <hr>
+      <h5 class="mb-3">Estado del Préstamo</h5>
+      <p class="mb-2"><strong>Estado:</strong> 
+        {% if prestamo.estado == 'PEND' %}
+          <span class="badge badge-warning">Pendiente</span>
+        {% elif prestamo.estado == 'PAG' %}
+          <span class="badge badge-success">Pagado</span>
+        {% else %}
+          <span class="badge badge-error">Anulado</span>
+        {% endif %}
+      </p>
+      <p class="mb-3"><strong>Saldo Actual:</strong> <span class="text-semibold text-primary fs-5">${{ prestamo.saldo }}</span></p>
+      
+      <!-- Barra de Progreso de Amortización -->
+      <div class="mb-1 small text-muted d-flex justify-content-between">
+        <span>Progreso de Pago:</span>
+        <span class="fw-bold">{{ progreso }}%</span>
+      </div>
+      <div class="progress" style="height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+        <div class="progress-bar bg-success" role="progressbar" style="width: {{ progreso }}%;" aria-valuenow="{{ progreso }}" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detalles Financieros -->
+  <div class="col-md-8">
+    <div class="card p-4 h-100">
+      <h5 class="mb-3">Detalles Financieros</h5>
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Tipo Préstamo</div>
+          <div class="fw-bold">{{ prestamo.tipo_prestamo.descripcion }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Tasa de Interés</div>
+          <div class="fw-bold">{{ prestamo.tipo_prestamo.tasa_interes }}%</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Fecha de Registro</div>
+          <div class="fw-bold">{{ prestamo.fecha_prestamo|date:"d/m/Y" }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Número de Cuotas</div>
+          <div class="fw-bold">{{ prestamo.numero_cuotas }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Monto Solicitado</div>
+          <div class="fw-bold">${{ prestamo.monto }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Interés Calculado</div>
+          <div class="fw-bold">${{ prestamo.interes }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small">Monto Total a Pagar</div>
+          <div class="fw-bold text-success">${{ prestamo.monto_pagar }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla de Amortización -->
+<div class="card mt-4">
+  <div class="card-header py-3">
+    <h5 class="m-0">Tabla de Amortización (Cuotas)</h5>
+  </div>
+  <div class="table-modern-wrap">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th>Cuota N°</th>
+          <th>Vence el</th>
+          <th>Valor Cuota</th>
+          <th>Saldo Cuota</th>
+          <th>Estado</th>
+          {% if prestamo.estado == 'PEND' and perms.RRHumanos.change_prestamo %}
+            <th class="text-center" style="width: 250px;">Registrar Abono/Pago</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for detalle in detalles %}
+        <tr>
+          <td><strong>Cuota {{ detalle.numero_cuota }}</strong></td>
+          <td>{{ detalle.fecha_vencimiento|date:"d/m/Y" }}</td>
+          <td>${{ detalle.valor_cuota }}</td>
+          <td class="text-semibold">${{ detalle.saldo_cuota }}</td>
+          <td>
+            {% if detalle.saldo_cuota == 0 %}
+              <span class="badge badge-success">Pagada</span>
+            {% elif detalle.fecha_vencimiento < hoy %}
+              <span class="badge badge-error">Vencida</span>
+            {% else %}
+              <span class="badge badge-warning">Pendiente</span>
+            {% endif %}
+          </td>
+          {% if prestamo.estado == 'PEND' and perms.RRHumanos.change_prestamo %}
+            <td class="text-center">
+              {% if detalle.saldo_cuota > 0 %}
+                <form method="post" action="{% url 'RRHumanos:registrar_pago_cuota' detalle.id %}" class="d-flex align-items-center justify-content-center gap-1">
+                  {% csrf_token %}
+                  <input type="number" name="monto_abono" value="{{ detalle.saldo_cuota }}" step="0.01" min="0.01" max="{{ detalle.saldo_cuota }}" class="form-control form-control-sm" style="width: 100px; display: inline-block;" required>
+                  <button type="submit" class="btn btn-sm btn-success py-1 px-2"><i data-lucide="check" class="icon-sm"></i> Abono</button>
+                </form>
+              {% else %}
+                <span class="text-success small"><i data-lucide="check-circle"></i> Liquidada</span>
+              {% endif %}
+            </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

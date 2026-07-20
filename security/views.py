@@ -42,15 +42,16 @@ def _full_name(user):
     return f'{user.first_name} {user.last_name}'.strip() or user.username
 
 
-def _account_created_message(user, password, role):
+def _account_created_message(user, password, role=None):
     login_url = f'{settings.SITE_URL}{reverse("security:login")}'
+    rol_name = role.name if role else "Sin rol asignado"
     body = (
         f'Estimado/a {_full_name(user)},\n\n'
         f'Su cuenta ha sido creada exitosamente en el Sistema de Ventas TecnoStock.\n\n'
         f'A continuación, sus credenciales de acceso:\n\n'
         f'Usuario: {user.username}\n'
         f'Contraseña: {password}\n'
-        f'Rol asignado: {role.name}\n\n'
+        f'Rol asignado: {rol_name}\n\n'
         f'Por favor, ingrese al sistema a través del siguiente enlace:\n'
         f'{login_url}\n\n'
         f'Le recomendamos cambiar su contraseña después de su primer inicio de sesión.\n\n'
@@ -157,20 +158,17 @@ class RegisterView(AdminOnlyMixin, CreateView):
         # ya la deja encriptada en la base de datos.
         password = form.cleaned_data['password1']
         phone = form.cleaned_data['phone']
-        role = form.cleaned_data['role']
         response = super().form_valid(form)  # crea el User (form.save() + self.object = user)
 
-        # Armamos el mensaje y lo mandamos por los dos canales. Cada envío
-        # devuelve True/False (nunca lanza una excepción) para poder avisarle
-        # al admin qué canal sí/no funcionó, sin romper la creación del usuario.
-        subject, body = _account_created_message(self.object, password, role)
+        # Armamos el mensaje y lo mandamos por los dos canales.
+        subject, body = _account_created_message(self.object, password, None)
         login_url = f'{settings.SITE_URL}{reverse("security:login")}'
         email_sent = send_credentials_email(
             self.object.email, subject, body,
             html_template='bienvenida.html',
             html_context={
                 'usuario': _full_name(self.object), 'username': self.object.username,
-                'rol': role.name, 'login_url': login_url,
+                'rol': 'Sin rol asignado', 'login_url': login_url,
             },
         )
         whatsapp_sent = send_whatsapp_message(phone, body)
@@ -182,9 +180,7 @@ class RegisterView(AdminOnlyMixin, CreateView):
         else:
             messages.warning(self.request, f'Usuario "{self.object.username}" creado, pero no se pudo enviar las credenciales automáticamente.')
 
-        # Aviso a los administradores (evento nuevo, no existía antes) — nunca
-        # bloquea ni afecta los mensajes de arriba, es "best effort" como todo
-        # lo demás en este archivo.
+        # Aviso a los administradores
         for admin_nombre, admin_email in get_admin_recipients():
             send_credentials_email(
                 admin_email,
@@ -194,14 +190,14 @@ class RegisterView(AdminOnlyMixin, CreateView):
                     f'Se registró un nuevo usuario en el sistema:\n\n'
                     f'Nombre: {_full_name(self.object)}\n'
                     f'Usuario: {self.object.username}\n'
-                    f'Rol asignado: {role.name}\n\n'
+                    f'Rol asignado: Sin rol asignado\n\n'
                     f'Atentamente,\n'
                     f'Sistema de Ventas TecnoStock'
                 ),
                 html_template='nuevo_usuario_registrado.html',
                 html_context={
                     'admin_nombre': admin_nombre, 'nuevo_usuario_nombre': _full_name(self.object),
-                    'nuevo_usuario_username': self.object.username, 'rol': role.name,
+                    'nuevo_usuario_username': self.object.username, 'rol': 'Sin rol asignado',
                     'fecha': timezone.now().strftime('%d/%m/%Y %H:%M'),
                     'usuario_url': f'{settings.SITE_URL}{reverse("security:user_detail", args=[self.object.pk])}',
                 },

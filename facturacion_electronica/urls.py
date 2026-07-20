@@ -9,5 +9,6 @@ urlpatterns = [
     path('<int:pk>/consultar-autorizacion/', views.comprobante_consultar_autorizacion, name='comprobante_consultar_autorizacion'),
     path('<int:pk>/xml/', views.comprobante_xml_download, name='comprobante_xml_download'),
     path('<int:pk>/ride/', views.comprobante_ride_pdf, name='comprobante_ride_pdf'),
+    path('<int:pk>/enviar-whatsapp/', views.comprobante_enviar_whatsapp, name='comprobante_enviar_whatsapp'),
     path('api/verificar/', views.verificar_autorizacion_api, name='verificar_autorizacion_api'),
 ]

@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from caja.models import MovimientoCaja, SesionCaja
 from cobros.models import CobroFactura
-from configuracion.models import ConfiguracionSistema
+from configuracion.models import ConfiguracionSistema, EmpresaFacturacionElectronica
 from facturacion_electronica.models import ComprobanteElectronico
 from notificaciones.models import Notificacion
 
@@ -784,17 +784,53 @@ class InvoiceDeleteButtonPermissionTests(TestCase):
         response = self.client.get(reverse('billing:invoice_detail', args=[self.invoice.pk]))
         self.assertNotContains(response, reverse('billing:invoice_delete', args=[self.invoice.pk]))
 
-    def test_con_permiso_de_eliminar_otorgado_directamente_muestra_el_boton(self):
-        # Un usuario SIN el grupo "Administrador" pero con el permiso
-        # delete_invoice otorgado (ej. vía el rol Vendedor) debe ver el botón.
+    def test_con_permiso_de_eliminar_otorgado_directamente_tampoco_muestra_el_boton(self):
+        # El botón fue eliminado por completo de la interfaz, por lo que no debe mostrarse
+        # en ningún caso.
         self._login_con_permisos('vendedor_con_borrar', ['view_invoice', 'delete_invoice'])
         response = self.client.get(reverse('billing:invoice_detail', args=[self.invoice.pk]))
-        self.assertContains(response, reverse('billing:invoice_delete', args=[self.invoice.pk]))
+        self.assertNotContains(response, reverse('billing:invoice_delete', args=[self.invoice.pk]))
 
-    def test_lista_de_facturas_respeta_el_mismo_permiso(self):
+    def test_lista_de_facturas_tampoco_muestra_el_boton(self):
+        # El botón fue eliminado de la lista de facturas
         self._login_con_permisos('vendedor_lista', ['view_invoice', 'delete_invoice', 'access_invoice_module'])
         response = self.client.get(reverse('billing:invoice_list'))
-        self.assertContains(response, reverse('billing:invoice_delete', args=[self.invoice.pk]))
+        self.assertNotContains(response, reverse('billing:invoice_delete', args=[self.invoice.pk]))
+
+
+    def test_eliminar_factura_sin_comprobante_borra_y_redirige_a_lista(self):
+        """Una factura sin comprobante electrónico se elimina con éxito y redirige a invoice_list."""
+        self._login_con_permisos('admin_borrar', ['view_invoice', 'delete_invoice', 'access_invoice_module'])
+        response = self.client.post(reverse('billing:invoice_delete', args=[self.invoice.pk]), follow=True)
+        self.assertRedirects(response, reverse('billing:invoice_list'))
+        self.assertFalse(Invoice.objects.filter(pk=self.invoice.pk).exists())
+
+    def test_eliminar_factura_con_comprobante_no_borra_y_muestra_error(self):
+        """Una factura con ComprobanteElectronico vinculado NO se borra: muestra mensaje de error
+        y redirige a invoice_detail en vez de lanzar un 500."""
+        from facturacion_electronica.models import ComprobanteElectronico
+        # Vinculamos un comprobante con FK PROTECT a esta factura
+        ComprobanteElectronico.objects.create(
+            invoice=self.invoice,
+            clave_acceso='1' * 49,
+            estado=ComprobanteElectronico.AUTORIZADO,
+            ambiente=ComprobanteElectronico.AMBIENTE_PRUEBAS,
+            establecimiento='001',
+            punto_emision='001',
+            secuencial='000000001',
+        )
+        self._login_con_permisos('admin_borrar2', ['view_invoice', 'delete_invoice'])
+        response = self.client.post(
+            reverse('billing:invoice_delete', args=[self.invoice.pk]), follow=True
+        )
+        # Debe redirigir al detalle, no a invoice_list, y la factura sigue existiendo
+        self.assertRedirects(response, reverse('billing:invoice_detail', args=[self.invoice.pk]))
+        self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())
+        # El mensaje de error debe estar en el response final
+        self.assertContains(response, 'comprobante electrónico')
+
+
+
 
 
 class InvoiceWhatsAppTests(TestCase):
@@ -878,16 +914,18 @@ class InvoiceEmailAdjuntosSRITests(TestCase):
     @patch('billing.views.send_email_with_attachments')
     @patch('facturacion_electronica.ride.build_ride_pdf')
     @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
-    def test_correo_adjunta_ride_y_xml_cuando_hay_comprobante(self, mock_generar, mock_ride, mock_send):
-        # build_ride_pdf ahora le pide el PDF a sri_facturacion_service por
-        # HTTP (antes lo armaba local con reportlab) — se mockea acá para
-        # no depender de tener ese servicio realmente levantado en los tests.
+    def test_correo_adjunta_el_ride_real_en_vez_del_pdf_local_cuando_esta_autorizado(self, mock_generar, mock_ride, mock_send):
+        # Con el comprobante AUTORIZADO, el documento adjunto debe ser el
+        # RIDE real del microservicio — el PDF armado localmente ya no se
+        # genera ni se adjunta en este caso (ver billing/views.py ->
+        # _documento_factura).
         mock_ride.return_value = b'%PDF-fake-ride%'
 
         def _fake_generar(invoice):
             return ComprobanteElectronico.objects.create(
                 invoice=invoice, establecimiento='001', punto_emision='001', secuencial='000000001',
-                clave_acceso='1' * 49, xml_generado='<factura>contenido</factura>',
+                clave_acceso='1' * 49, estado=ComprobanteElectronico.AUTORIZADO,
+                xml_generado='<factura>contenido</factura>',
             )
         mock_generar.side_effect = _fake_generar
 
@@ -897,11 +935,39 @@ class InvoiceEmailAdjuntosSRITests(TestCase):
         to_email, subject, body, adjuntos = mock_send.call_args[0]
         self.assertEqual(to_email, 'ana@example.com')
         nombres = [nombre for nombre, _, _ in adjuntos]
-        self.assertEqual(len(adjuntos), 3)
-        self.assertTrue(any(n.startswith('factura_') and n.endswith('.pdf') for n in nombres))
+        self.assertEqual(len(adjuntos), 2)
         self.assertTrue(any(n.startswith('ride_') and n.endswith('.pdf') for n in nombres))
         self.assertTrue(any(n.startswith('factura_sri_') and n.endswith('.xml') for n in nombres))
+        self.assertFalse(any(n.startswith('factura_') and n.endswith('.pdf') for n in nombres))
         self.assertIn('RIDE', body)
+
+    @patch('billing.views.send_email_with_attachments')
+    @patch('facturacion_electronica.ride.build_ride_pdf')
+    @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
+    def test_correo_usa_el_pdf_local_si_el_comprobante_aun_no_esta_autorizado(self, mock_generar, mock_ride, mock_send):
+        # Un comprobante recién generado/enviado (no autorizado todavía) NO
+        # debe disparar ningún pedido de RIDE al microservicio — se sigue
+        # usando el PDF local como respaldo, sin depender de que el SRI ya
+        # haya resuelto la factura.
+        def _fake_generar(invoice):
+            return ComprobanteElectronico.objects.create(
+                invoice=invoice, establecimiento='001', punto_emision='001', secuencial='000000001',
+                clave_acceso='1' * 49, estado=ComprobanteElectronico.ENVIADO,
+                xml_generado='<factura>contenido</factura>',
+            )
+        mock_generar.side_effect = _fake_generar
+
+        self._post()
+
+        mock_send.assert_called_once()
+        to_email, subject, body, adjuntos = mock_send.call_args[0]
+        nombres = [nombre for nombre, _, _ in adjuntos]
+        self.assertEqual(len(adjuntos), 2)
+        self.assertTrue(any(n.startswith('factura_') and n.endswith('.pdf') for n in nombres))
+        self.assertTrue(any(n.startswith('factura_sri_') and n.endswith('.xml') for n in nombres))
+        self.assertFalse(any(n.startswith('ride_') for n in nombres))
+        mock_ride.assert_not_called()
+        self.assertNotIn('RIDE', body)
 
     @patch('billing.views.send_email_with_attachments')
     @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
@@ -922,18 +988,19 @@ class InvoiceEmailAdjuntosSRITests(TestCase):
     @patch('billing.views.send_email_with_attachments')
     @patch('facturacion_electronica.ride.build_ride_pdf')
     @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
-    def test_correo_omite_el_ride_si_el_microservicio_de_facturacion_falla(self, mock_generar, mock_ride, mock_send):
-        # "best effort" nuevo (desde que el RIDE se pide por HTTP a
-        # sri_facturacion_service): si ESE servicio está caído justo al
-        # armar el correo, la venta y el correo deben salir igual, con el
-        # XML (ya lo teníamos guardado localmente) pero sin el RIDE.
+    def test_correo_cae_al_pdf_local_si_autorizado_pero_el_microservicio_no_entrega_el_ride(self, mock_generar, mock_ride, mock_send):
+        # "best effort" también acá: si el comprobante SÍ está autorizado
+        # pero justo en ese momento el microservicio no puede entregar el
+        # RIDE, el correo debe salir igual con el PDF local (nunca sin
+        # adjunto), y el XML (ya lo teníamos guardado localmente).
         from facturacion_electronica.services import SRIError
-        mock_ride.side_effect = SRIError('sri_facturacion_service no responde')
+        mock_ride.side_effect = SRIError('El microservicio no responde')
 
         def _fake_generar(invoice):
             return ComprobanteElectronico.objects.create(
                 invoice=invoice, establecimiento='001', punto_emision='001', secuencial='000000001',
-                clave_acceso='1' * 49, xml_generado='<factura>contenido</factura>',
+                clave_acceso='1' * 49, estado=ComprobanteElectronico.AUTORIZADO,
+                xml_generado='<factura>contenido</factura>',
             )
         mock_generar.side_effect = _fake_generar
 
@@ -942,11 +1009,183 @@ class InvoiceEmailAdjuntosSRITests(TestCase):
         mock_send.assert_called_once()
         to_email, subject, body, adjuntos = mock_send.call_args[0]
         nombres = [nombre for nombre, _, _ in adjuntos]
+        mock_ride.assert_called_once()
         self.assertEqual(len(adjuntos), 2)
         self.assertTrue(any(n.startswith('factura_') and n.endswith('.pdf') for n in nombres))
         self.assertTrue(any(n.startswith('factura_sri_') and n.endswith('.xml') for n in nombres))
         self.assertFalse(any(n.startswith('ride_') for n in nombres))
         self.assertNotIn('RIDE', body)
+
+
+class InvoiceEmailYPdfUsanLaEmpresaActivaTests(TestCase):
+    """El membrete del PDF y el asunto/cuerpo del correo de la factura deben
+    coincidir con la empresa activa en Facturación Electrónica (la que
+    realmente firma esa misma factura ante el SRI), no con el nombre
+    general de ConfiguracionSistema — ver billing/views.py -> _datos_emisor."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name='Marca Emisor')
+        self.group = ProductGroup.objects.create(name='Grupo Emisor')
+        self.customer = Customer.objects.create(
+            dni='1700000407', first_name='Marta', last_name='Ruiz', email='marta@example.com',
+        )
+        self.product = Product.objects.create(
+            name='Producto Emisor', brand=self.brand, group=self.group, unit_price=Decimal('10'), stock=50,
+        )
+        self.user = User.objects.create_user('vendedor_emisor', password='clave-test-123')
+        perms = Permission.objects.filter(
+            codename__in=['view_invoice', 'add_invoice', 'view_invoicedetail', 'add_invoicedetail']
+        )
+        self.user.user_permissions.set(perms)
+        self.client.force_login(self.user)
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
+
+        config = ConfiguracionSistema.get_solo()
+        config.empresa_nombre = 'Nombre General (no debe aparecer en la factura)'
+        config.empresa_ruc = '0000000000001'
+        config.save()
+
+    def _post(self):
+        data = {
+            'customer': self.customer.id, 'tipo_pago': Invoice.CONTADO, 'forma_pago': Invoice.EFECTIVO,
+            'monto_recibido': '1000.00',
+            'details-TOTAL_FORMS': '1', 'details-INITIAL_FORMS': '0', 'details-MIN_NUM_FORMS': '0', 'details-MAX_NUM_FORMS': '1000',
+            'details-0-id': '', 'details-0-product': self.product.id, 'details-0-quantity': '1', 'details-0-unit_price': '10.00',
+        }
+        return self.client.post(reverse('billing:invoice_create'), data)
+
+    @patch('billing.views.send_email_with_attachments')
+    @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
+    def test_correo_usa_la_razon_social_de_la_empresa_activa(self, mock_generar, mock_send):
+        mock_generar.return_value = None
+        EmpresaFacturacionElectronica.objects.create(
+            ruc='1790000000001', razon_social='Empresa Activa Real', direccion_matriz='Av. Real 123',
+            codigo_establecimiento='001', codigo_punto_emision='001',
+            empresa_id_microservicio='1', api_key='clave-1', activa=True,
+        )
+
+        self._post()
+
+        mock_send.assert_called_once()
+        _to_email, subject, body, _adjuntos = mock_send.call_args[0]
+        self.assertIn('Empresa Activa Real', subject)
+        self.assertIn('Empresa Activa Real', body)
+        self.assertNotIn('Nombre General', subject)
+        self.assertNotIn('Nombre General', body)
+
+    @patch('billing.views.send_email_with_attachments')
+    @patch('facturacion_electronica.services.generar_y_enviar_comprobante')
+    def test_correo_cae_al_nombre_general_si_no_hay_empresa_activa(self, mock_generar, mock_send):
+        mock_generar.return_value = None
+
+        self._post()
+
+        mock_send.assert_called_once()
+        _to_email, subject, _body, _adjuntos = mock_send.call_args[0]
+        self.assertIn('Nombre General', subject)
+
+    def test_datos_emisor_usa_la_empresa_activa_no_configuracionsistema(self):
+        EmpresaFacturacionElectronica.objects.create(
+            ruc='1790000000001', razon_social='Empresa Activa Real', direccion_matriz='Av. Real 123',
+            codigo_establecimiento='001', codigo_punto_emision='001',
+            empresa_id_microservicio='1', api_key='clave-1', activa=True,
+        )
+
+        from billing.views import _datos_emisor
+        razon_social, ruc, direccion = _datos_emisor(ConfiguracionSistema.get_solo())
+
+        self.assertEqual(razon_social, 'Empresa Activa Real')
+        self.assertEqual(ruc, '1790000000001')
+        self.assertEqual(direccion, 'Av. Real 123')
+
+    def test_datos_emisor_cae_a_configuracionsistema_si_no_hay_empresa_activa(self):
+        from billing.views import _datos_emisor
+        razon_social, ruc, _direccion = _datos_emisor(ConfiguracionSistema.get_solo())
+
+        self.assertEqual(razon_social, 'Nombre General (no debe aparecer en la factura)')
+        self.assertEqual(ruc, '0000000000001')
+
+    def test_pdf_de_la_factura_no_falla_y_usa_la_empresa_activa(self):
+        EmpresaFacturacionElectronica.objects.create(
+            ruc='1790000000001', razon_social='Empresa Activa Real', direccion_matriz='Av. Real 123',
+            codigo_establecimiento='001', codigo_punto_emision='001',
+            empresa_id_microservicio='1', api_key='clave-1', activa=True,
+        )
+        invoice = Invoice.objects.create(
+            customer=self.customer, subtotal=Decimal('10'), tax=Decimal('1.5'), total=Decimal('11.5'),
+            tipo_pago=Invoice.CONTADO, forma_pago=Invoice.EFECTIVO, saldo=0,
+        )
+
+        from billing.views import _build_invoice_pdf
+        pdf_bytes = _build_invoice_pdf(invoice)
+
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+
+class InvoicePdfDescargaTests(TestCase):
+    """Botón 'Descargar PDF' (billing/views.py -> invoice_pdf, vía
+    _documento_factura): debe servir el RIDE real del SRI cuando el
+    comprobante está autorizado, y el PDF local en cualquier otro caso."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name='Marca PDF')
+        self.group = ProductGroup.objects.create(name='Grupo PDF')
+        self.customer = Customer.objects.create(dni='1700000414', first_name='Sofía', last_name='León')
+        self.invoice = Invoice.objects.create(
+            customer=self.customer, subtotal=Decimal('10'), tax=Decimal('1.5'), total=Decimal('11.5'),
+            tipo_pago=Invoice.CONTADO, forma_pago=Invoice.EFECTIVO, saldo=0,
+        )
+        self.user = User.objects.create_user('vendedor_pdf', password='clave-test-123')
+        self.user.user_permissions.set(Permission.objects.filter(codename='view_invoice'))
+        self.client.force_login(self.user)
+
+    def _crear_comprobante(self, estado):
+        return ComprobanteElectronico.objects.create(
+            invoice=self.invoice, establecimiento='001', punto_emision='001', secuencial='000000001',
+            clave_acceso='1' * 49, estado=estado,
+        )
+
+    def test_sin_comprobante_descarga_el_pdf_local(self):
+        response = self.client.get(reverse('billing:invoice_pdf', args=[self.invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('factura_', response['Content-Disposition'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_comprobante_no_autorizado_descarga_el_pdf_local_sin_pedir_el_ride(self):
+        self._crear_comprobante(ComprobanteElectronico.ENVIADO)
+
+        with patch('facturacion_electronica.ride.build_ride_pdf') as mock_ride:
+            response = self.client.get(reverse('billing:invoice_pdf', args=[self.invoice.pk]))
+
+        mock_ride.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('factura_', response['Content-Disposition'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+    @patch('facturacion_electronica.ride.build_ride_pdf')
+    def test_comprobante_autorizado_descarga_el_ride_real(self, mock_ride):
+        mock_ride.return_value = b'%PDF-fake-ride%'
+        comprobante = self._crear_comprobante(ComprobanteElectronico.AUTORIZADO)
+
+        response = self.client.get(reverse('billing:invoice_pdf', args=[self.invoice.pk]))
+
+        mock_ride.assert_called_once_with(comprobante)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('ride_', response['Content-Disposition'])
+        self.assertEqual(response.content, b'%PDF-fake-ride%')
+
+    @patch('facturacion_electronica.ride.build_ride_pdf')
+    def test_autorizado_pero_microservicio_caido_cae_al_pdf_local(self, mock_ride):
+        from facturacion_electronica.services import SRIError
+        mock_ride.side_effect = SRIError('El microservicio no responde')
+        self._crear_comprobante(ComprobanteElectronico.AUTORIZADO)
+
+        response = self.client.get(reverse('billing:invoice_pdf', args=[self.invoice.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('factura_', response['Content-Disposition'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
 
 
 class InvoiceWhatsappRecordatorioUrlTests(TestCase):
@@ -1103,6 +1342,10 @@ class InvoicePaypalIntegrationTests(TestCase):
             codename__in=['view_invoice', 'add_invoice', 'view_invoicedetail', 'add_invoicedetail']
         ))
         self.client.force_login(self.user)
+        # PayPal ahora exige caja abierta antes de iniciar el checkout, igual
+        # que efectivo/tarjeta — ver test_paypal_sin_caja_abierta_es_bloqueado
+        # para el caso sin caja.
+        SesionCaja.objects.create(usuario=self.user, monto_inicial=Decimal('100.00'))
 
     def _post_paypal(self):
         data = {
@@ -1142,6 +1385,16 @@ class InvoicePaypalIntegrationTests(TestCase):
             form = InvoiceForm()
             valores = [c[0] for c in form.fields['forma_pago'].choices]
             self.assertNotIn(Invoice.PAYPAL, valores)
+
+    @patch('paypal_pagos.services.crear_orden')
+    def test_paypal_sin_caja_abierta_es_bloqueado(self, mock_crear_orden):
+        SesionCaja.objects.filter(usuario=self.user).delete()
+        mock_crear_orden.return_value = ('ORDER2', 'https://paypal.test/approve')
+        response = self._post_paypal()
+        self.assertEqual(response.status_code, 200)
+        mock_crear_orden.assert_not_called()
+        from paypal_pagos.models import OrdenPaypal
+        self.assertFalse(OrdenPaypal.objects.exists())
 
 
 class InvoiceModuleAccessVsViewButtonTests(TestCase):

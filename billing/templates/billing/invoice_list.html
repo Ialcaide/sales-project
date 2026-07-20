@@ -102,12 +102,7 @@
               {% if inv.is_active and perms.billing.change_invoice %}
                 <a href="{% url 'billing:invoice_cancel' inv.pk %}" class="row-action-btn" title="Anular"><i data-lucide="ban"></i></a>
               {% endif %}
-              {% if perms.billing.delete_invoice %}
-                <button type="button" class="row-action-btn danger" title="Eliminar" data-bs-toggle="modal" data-bs-target="#deleteModal"
-                        data-delete-url="{% url 'billing:invoice_delete' inv.pk %}" data-delete-label="la factura #{{ inv.id|stringformat:'04d' }}">
-                  <i data-lucide="trash-2"></i>
-                </button>
-              {% endif %}
+
             </div>
           </td>
         </tr>

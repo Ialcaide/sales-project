@@ -16,11 +16,17 @@ class CobroFactura(models.Model):
     # corresponder a un pago real capturado por paypal_pagos/services.py
     # (el negocio SÍ recibe dinero de un cliente) — pero el campo también
     # se puede elegir a mano para un cobro registrado manualmente que de
-    # hecho se pagó por PayPal fuera de este flujo.
+    # hecho se pagó por PayPal fuera de este flujo. TARJETA es la misma
+    # captura informativa que billing.Invoice (ver tarjeta_titular/cvv/
+    # expiracion más abajo) — no hay ninguna pasarela real integrada, y a
+    # diferencia de PayPal, se registra en ESTE mismo formulario (no
+    # redirige a ningún lado, ver cobros/forms.py -> CobroFacturaForm).
     EFECTIVO = 'efectivo'
+    TARJETA = 'tarjeta'
     PAYPAL = 'paypal'
     FORMA_PAGO_CHOICES = [
         (EFECTIVO, 'Efectivo'),
+        (TARJETA, 'Tarjeta'),
         (PAYPAL, 'PayPal'),
     ]
 
@@ -36,6 +42,19 @@ class CobroFactura(models.Model):
     # cliente físicamente (para calcular el cambio, ver la property abajo).
     monto_recibido = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Monto recibido en efectivo'
+    )
+    # Solo aplican a TARJETA — informativos, nunca se guarda el número
+    # completo de la tarjeta (mismo criterio que billing.Invoice). Guardar
+    # el CVV/CVC es una decisión consciente pese a ir contra PCI-DSS,
+    # documentada igual que en billing/models.py — no es un descuido.
+    tarjeta_titular = models.CharField(
+        max_length=150, null=True, blank=True, verbose_name='Titular de la tarjeta'
+    )
+    tarjeta_cvv = models.CharField(
+        max_length=4, null=True, blank=True, verbose_name='CVV/CVC'
+    )
+    tarjeta_expiracion = models.DateField(
+        null=True, blank=True, verbose_name='Fecha de expiración de la tarjeta'
     )
     observacion = models.TextField(blank=True, verbose_name='Observación')
 

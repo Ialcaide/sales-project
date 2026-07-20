@@ -110,6 +110,51 @@ def capturar_orden(order_id):
         raise PayPalError('No se pudo confirmar el pago con PayPal.') from e
 
 
+def crear_payout(monto, referencia, receiver_email, nota=''):
+    """Payouts API v1 — dinero SALIENDO del negocio hacia un tercero (ej.
+    pagarle a un proveedor). A diferencia de crear_orden()/capturar_orden()
+    (Orders API, dinero ENTRANDO, con un paso de aprobación del comprador
+    en paypal.com), acá no hay checkout ni redirect: PayPal resuelve el
+    envío en esta misma llamada (normalmente queda 'PENDING' de inmediato
+    y se termina de procesar del lado de PayPal, sin que este sistema
+    necesite esperar más). Devuelve (payout_batch_id, batch_status)."""
+    if not receiver_email:
+        raise PayPalError('Falta el correo del destinatario para enviar el pago por PayPal.')
+    token = obtener_access_token()
+    body = {
+        'sender_batch_header': {
+            'sender_batch_id': referencia,
+            'email_subject': 'Pago recibido',
+            'email_message': nota or 'Pago registrado desde TecnoStock S.A.',
+        },
+        'items': [{
+            'recipient_type': 'EMAIL',
+            'amount': {'value': f'{monto:.2f}', 'currency': 'USD'},
+            'receiver': receiver_email,
+            'note': nota,
+            'sender_item_id': referencia,
+        }],
+    }
+    try:
+        response = requests.post(
+            f'{_api_base()}/v1/payments/payouts',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            json=body,
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as e:
+        logger.exception('No se pudo crear el payout de PayPal (referencia=%s)', referencia)
+        raise PayPalError('No se pudo enviar el pago por PayPal.') from e
+
+    batch_header = data.get('batch_header', {})
+    batch_id = batch_header.get('payout_batch_id')
+    if not batch_id:
+        raise PayPalError('PayPal no devolvió un ID de lote para el pago.')
+    return batch_id, batch_header.get('batch_status')
+
+
 def verificar_firma_webhook(headers, body_parsed):
     """Verifica que una notificación de webhook realmente viene de PayPal
     (no de cualquiera que le pegue un POST a la URL). `headers` es un dict

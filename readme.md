@@ -1,21 +1,33 @@
 # Sistema de Ventas y Facturación — TecnoStock S.A.
+activar entorno de sri..\venvsales\Scripts\uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 
-Sistema web desarrollado con **Django 6.0** para gestionar el ciclo completo de ventas de una empresa: marcas, grupos de productos, proveedores, productos (con imagen o imagen autogenerada), clientes, facturación, compras (con actualización automática de inventario) y un módulo completo de **seguridad** (usuarios, roles y permisos reales, recuperación de credenciales, notificaciones por correo y WhatsApp).
 
-Este documento está pensado para que puedas **entender cómo funciona todo el sistema** siguiendo el mismo patrón que ya usa el proyecto.
+Sistema web desarrollado con **Django 6.0** para gestionar el ciclo completo de ventas de una empresa: marcas, grupos de productos, proveedores, productos, clientes, facturación (con pago en efectivo, tarjeta o **PayPal real**), compras, cuentas por cobrar/pagar, caja, devoluciones, **facturación electrónica ante el SRI (Ecuador)**, notificaciones internas, reportes, y un módulo completo de **seguridad** (usuarios, roles y permisos reales, recuperación de credenciales, notificaciones por correo y WhatsApp).
+
+Desde la versión actual, el sistema son **dos servidores separados que corren al mismo tiempo**:
+
+1. **El proyecto Django principal** (esta carpeta) — todo el negocio: ventas, compras, caja, usuarios, etc.
+2. **`sri_facturacion_service/`** — un microservicio **FastAPI independiente** (carpeta hermana, propio venv/BD/`.env`) que se encarga SOLO de hablar con el SRI (generar, firmar y enviar comprobantes electrónicos). El proyecto principal le pide todo por HTTP; si este servicio está apagado, el sistema principal sigue funcionando igual (la venta no se bloquea, solo no se genera el comprobante SRI en ese momento).
+
+Este documento está pensado para que puedas **entender y activar cada parte del sistema** siguiendo el mismo patrón que ya usa el proyecto.
 
 ---
 
 ## Tabla de contenidos
 
 - [Requisitos previos](#requisitos-previos)
-- [Instalación paso a paso](#instalación-paso-a-paso)
+- [Instalación paso a paso (proyecto principal)](#instalación-paso-a-paso-proyecto-principal)
+- [Instalación del microservicio de facturación electrónica (SRI)](#instalación-del-microservicio-de-facturación-electrónica-sri)
+- [Cómo arrancar todo el sistema](#cómo-arrancar-todo-el-sistema)
 - [Variables de entorno (.env)](#variables-de-entorno-env)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Cómo funciona el sistema (arquitectura general)](#cómo-funciona-el-sistema-arquitectura-general)
 - [Apps del proyecto](#apps-del-proyecto)
 - [Sistema de Roles y Permisos](#sistema-de-roles-y-permisos)
 - [Notificaciones (Email y WhatsApp)](#notificaciones-email-y-whatsapp)
+- [Facturación electrónica (SRI — Ecuador)](#facturación-electrónica-sri--ecuador)
+- [Pagos con PayPal](#pagos-con-paypal)
+- [Formas de pago del sistema](#formas-de-pago-del-sistema)
 - [Modelos de datos](#modelos-de-datos)
 - [Funcionalidades](#funcionalidades)
 - [URLs del sistema](#urls-del-sistema)
@@ -44,24 +56,21 @@ python --version
 
 ---
 
-## Instalación paso a paso
+## Instalación paso a paso (proyecto principal)
 
 ### Paso 1 — Copiar el proyecto
 
-Copia la carpeta del proyecto a tu computadora. La estructura debe verse así:
+Copia la carpeta del proyecto a tu computadora. La estructura debe verse así (resumida — ver [Estructura del proyecto](#estructura-del-proyecto) para el detalle completo):
 
 ```
-sales_project/
-    manage.py
+sales_project/                        ← raíz del repositorio
+    manage.py                         ← proyecto Django principal
     requirements.txt
-    billing/
-    purchasing/
-    security/
-    home/
-    shared/
-    config/
-    templates/
-    media/
+    billing/  purchasing/  security/  home/  shared/  config/
+    pagos/  cobros/  caja/  devoluciones/  notificaciones/  reportes/
+    configuracion/  paypal_pagos/  facturacion_electronica/
+    templates/  media/
+    sri_facturacion_service/          ← microservicio FastAPI (proyecto aparte, ver más abajo)
 ```
 
 ### Paso 2 — Abrir terminal en la carpeta del proyecto
@@ -77,11 +86,13 @@ dir
 
 ### Paso 3 — Crear el entorno virtual
 
-El entorno virtual aísla las dependencias del proyecto de las del sistema.
+El entorno virtual aísla las dependencias del proyecto de las del sistema. **Este mismo entorno (`venvsales`) se reutiliza también para el microservicio de facturación electrónica** — no hace falta crear uno segundo.
 
 ```
 python -m venv venvsales
 ```
+
+> ⚠️ **Un entorno virtual no es "movible".** Si más adelante copiás o movés toda la carpeta del proyecto a otra ubicación (ej. de `Descargas` a `Documentos`), **no muevas `venvsales` con él pensando que va a seguir funcionando** — los scripts `activate` quedan con la ruta vieja grabada adentro y activan un Python que apunta al lugar original. Si eso pasa, lo más simple es borrar esa carpeta `venvsales` y crearla de nuevo (Paso 3) en la ubicación definitiva.
 
 ### Paso 4 — Activar el entorno virtual
 
@@ -102,7 +113,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 Cuando el entorno está activo, verás `(venvsales)` al inicio del prompt.
 
-> **IMPORTANTE:** El entorno virtual debe estar activo en cada sesión nueva de terminal.
+> **IMPORTANTE:** El entorno virtual debe estar activo en cada sesión nueva de terminal. Si activaste correctamente pero un comando como `python` o `uvicorn` sigue sin reconocerse, corré `where python` y confirmá que la ruta que te devuelve es la de **este** `venvsales` (no una copia vieja en otra carpeta) — ver la advertencia del Paso 3.
 
 ### Paso 5 — Instalar dependencias
 
@@ -116,13 +127,19 @@ pip install -r requirements.txt
 | Pillow | Manejo de imágenes en productos |
 | openpyxl | Exportación a Excel |
 | reportlab | Exportación a PDF |
+| python-barcode | Códigos de barra en productos y comprobantes |
+| requests | Cliente HTTP — habla con PayPal y con el microservicio de facturación SRI |
+| PyJWT | Tokens usados por el flujo de seguridad |
+| twilio | Envío de WhatsApp |
 | whitenoise | Sirve archivos estáticos/media en producción |
 | django-extensions | Shell plus con SQL |
 | gunicorn | Servidor WSGI para producción (Render) |
 
+> Nota: `cryptography`, `lxml`, `zeep` y `signxml` (firma electrónica y SOAP con el SRI) **ya no son dependencias de este proyecto** — esa lógica vive ahora en `sri_facturacion_service/`, que tiene su propio `requirements.txt` (ver la sección siguiente).
+
 ### Paso 6 — Configurar el archivo `.env`
 
-Ver la sección [Variables de entorno](#variables-de-entorno-env) más abajo. Sin esto, el sistema funciona igual, pero **no podrá enviar correos ni mensajes de WhatsApp**.
+Ver la sección [Variables de entorno](#variables-de-entorno-env) más abajo. Sin esto, el sistema funciona igual, pero **no podrá enviar correos, WhatsApp, cobrar con PayPal, ni hablarle al microservicio de facturación SRI**.
 
 ### Paso 7 — Aplicar migraciones
 
@@ -156,32 +173,189 @@ Abrir en el navegador: `http://127.0.0.1:8000/`
 
 Para detener el servidor: `Ctrl + C`
 
+> Esto arranca **solo** el proyecto principal. Para que la facturación electrónica SRI funcione también necesitás el microservicio corriendo al mismo tiempo — ver la sección siguiente.
+
+---
+
+## Instalación del microservicio de facturación electrónica (SRI)
+
+`sri_facturacion_service/` es un proyecto **FastAPI independiente**, hermano de este (mismo repositorio, carpeta aparte). No es una app Django: no tiene `manage.py`, no usa el ORM de Django, y no comparte base de datos con el proyecto principal — se comunican únicamente por HTTP.
+
+### Paso 1 — Instalar sus dependencias propias
+
+Con el mismo `venvsales` ya activado (ver instalación del proyecto principal):
+
+```
+cd sri_facturacion_service
+pip install -r requirements.txt
+```
+
+| Paquete | Para qué sirve |
+|---|---|
+| fastapi | Framework del microservicio |
+| uvicorn | Servidor que ejecuta la app FastAPI |
+| sqlmodel | ORM (SQLAlchemy + Pydantic) — guarda el estado de cada comprobante |
+| pydantic / pydantic-settings | Validación del payload que manda el proyecto Django, y carga tipada del `.env` propio |
+| lxml | Construcción y firma del XML del comprobante |
+| cryptography | Lee el certificado `.p12` y firma criptográficamente el XML (XAdES-BES) |
+| zeep | Cliente SOAP — envía el XML firmado a los web services del SRI |
+| reportlab / python-barcode / Pillow | Generan el PDF del RIDE (representación impresa de la factura) al vuelo |
+| python-dotenv | Carga el `.env` propio de este microservicio |
+| pytest / httpx | Tests propios de este servicio |
+
+### Paso 2 — Conseguir un certificado de firma electrónica (.p12)
+
+Esto es responsabilidad del emisor real de las facturas (una empresa ecuatoriana), no del código:
+
+1. Comprar/obtener un certificado de firma electrónica válido para facturación (ej. Security Data, Banco Central del Ecuador, u otra entidad certificadora autorizada por el SRI), en formato `.p12`/`.pfx`.
+2. Copiar ese archivo a `sri_facturacion_service/certificados/` (la carpeta ya existe en el repo, vacía por seguridad).
+3. Anotar la contraseña del certificado — la vas a necesitar en el `.env` de este servicio (Paso 3).
+
+> Sin un certificado real configurado, el microservicio sigue arrancando y respondiendo normalmente — simplemente cada comprobante que se intente generar queda en estado `error` con el mensaje "No hay certificado configurado..." (ver [Facturación electrónica](#facturación-electrónica-sri--ecuador)).
+
+### Paso 3 — Configurar su `.env` propio
+
+Este `.env` es **distinto y separado** del `.env` del proyecto Django (vive dentro de `sri_facturacion_service/`, no en la raíz del repo):
+
+```env
+# Ruta al certificado (relativa a esta carpeta) y su contraseña.
+SRI_CERTIFICADO_PATH=certificados/tu_certificado.p12
+SRI_CERTIFICADO_PASSWORD=la-contraseña-del-certificado
+
+# 'pruebas' = ambiente de certificación del SRI (celcer.sri.gob.ec), sin
+# validez tributaria. 'produccion' = ambiente real (cel.sri.gob.ec).
+SRI_AMBIENTE=pruebas
+
+# Secreto compartido: debe ser EXACTAMENTE igual al valor de
+# FACTURACION_ELECTRONICA_SERVICE_API_KEY en el .env del proyecto Django
+# (ver la sección de variables de entorno más abajo).
+API_KEY=elegí-una-cadena-larga-y-aleatoria
+
+# Opcional — por defecto usa SQLite local, no hace falta tocarlo.
+# DATABASE_URL=sqlite:///./db.sqlite3
+
+DEBUG=True
+```
+
+### Paso 4 — Arrancar el microservicio
+
+No usa `migrate` — las tablas se crean solas al arrancar (`init_db()` corre automáticamente). Desde dentro de `sri_facturacion_service/`, con el venv activo:
+
+```
+uvicorn main:app --reload --port 8002
+```
+
+> El puerto **8002** es el que el proyecto Django principal ya espera por defecto (`FACTURACION_ELECTRONICA_SERVICE_URL` en su `.env`, ver más abajo) — si arrancás el microservicio en otro puerto, tenés que actualizar esa variable para que coincidan.
+
+Para confirmar que arrancó bien, abrí en el navegador `http://127.0.0.1:8002/` — debería responder algo como:
+```json
+{"servicio": "sri_facturacion_service", "estado": "ok", "ambiente_sri": "pruebas", "recepcion_wsdl": "...", "autorizacion_wsdl": "...", "debug": true}
+```
+
+### Correr sus tests
+
+Desde dentro de `sri_facturacion_service/`:
+```
+pytest
+```
+
+---
+
+## Cómo arrancar todo el sistema
+
+Necesitás **dos terminales abiertas al mismo tiempo**, ambas con el mismo `venvsales` activado:
+
+**Terminal 1 — proyecto principal (puerto 8000):**
+```
+cd sales_project
+venvsales\Scripts\activate
+python manage.py runserver
+```
+
+**Terminal 2 — microservicio de facturación SRI (puerto 8002):**
+```
+cd sales_project\sri_facturacion_service
+..\venvsales\Scripts\activate
+uvicorn main:app --reload --port 8002
+```
+
+Si el microservicio (Terminal 2) no está corriendo, el proyecto principal **sigue funcionando sin problema**: las ventas, compras, pagos, etc. se completan igual — solo que la factura queda sin comprobante electrónico SRI hasta que vuelvas a intentarlo con el microservicio activo (botón "Reintentar Generación" en el detalle de la factura).
+
 ---
 
 ## Variables de entorno (.env)
 
-El proyecto lee automáticamente un archivo `.env` en la raíz (mismo nivel que `manage.py`), si existe. Esto lo hace `config/settings.py` al arrancar, **sin sobrescribir** variables reales del sistema operativo (así en Render, por ejemplo, siguen mandando las variables configuradas en su dashboard).
+Hay **dos archivos `.env` distintos**, uno por proyecto — no se comparten ni se leen entre sí.
 
-Crea un archivo llamado `.env` (sin nombre antes del punto) en la raíz del proyecto:
+### `.env` del proyecto principal (en la raíz, junto a `manage.py`)
+
+El proyecto lee automáticamente este archivo al arrancar (lo hace `config/settings.py`), **sin sobrescribir** variables reales del sistema operativo (así en Render, por ejemplo, siguen mandando las variables configuradas en su dashboard).
 
 ```env
-# Gmail — para enviar correos de credenciales y recuperación de contraseña.
-# Debe ser una "Contraseña de aplicación" de Gmail (16 caracteres), no tu contraseña normal.
+# --- Gmail — envío de correos ---
+# Debe ser una "Contraseña de aplicación" de Gmail (16 caracteres), no tu
+# contraseña normal de la cuenta (se genera desde la configuración de
+# seguridad de tu cuenta de Google, con la verificación en 2 pasos activada).
 EMAIL_HOST_USER=tucorreo@gmail.com
 EMAIL_HOST_PASSWORD=xxxxxxxxxxxxxxxx
 
-# Twilio — para enviar WhatsApp. Se obtienen creando una cuenta gratuita en
-# https://www.twilio.com/ y activando el "WhatsApp Sandbox".
+# --- Twilio — envío de WhatsApp ---
+# Se obtienen creando una cuenta gratuita en https://www.twilio.com/ y
+# activando el "WhatsApp Sandbox".
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
 
-# URL pública real del sistema (para que los links de los correos/WhatsApp
-# funcionen sin importar si estás corriendo en tu PC o en producción).
+# --- Telegram — alertas internas del sistema (stock bajo, caja, vencimientos) ---
+# TELEGRAM_BOT_TOKEN: lo da @BotFather en Telegram (hablale y usa /newbot).
+# TELEGRAM_CHAT_ID: el ID del chat/grupo de administradores donde el bot
+# debe avisar — se obtiene agregando el bot a ese chat, mandándole un
+# mensaje cualquiera ahí, y visitando
+# https://api.telegram.org/bot<TU_TOKEN>/getUpdates (el "chat":{"id":...}
+# de la respuesta es el que va acá).
+TELEGRAM_BOT_TOKEN=xxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TELEGRAM_CHAT_ID=-100xxxxxxxxxx
+
+# --- PayPal — cobro real con PayPal ---
+# Se obtienen creando una app en https://developer.paypal.com/ (dashboard
+# de desarrolladores). Hay credenciales de Sandbox (pruebas) y de Live
+# (dinero real) — usá las de Sandbox mientras estés probando.
+PAYPAL_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+PAYPAL_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+PAYPAL_MODE=sandbox
+# Opcional pero recomendado: se obtiene al registrar el webhook (apuntando
+# a https://tu-dominio/paypal/webhook/) en el mismo dashboard de PayPal.
+# Sin esto, las notificaciones automáticas de PayPal se rechazan (el pago
+# igual se confirma por el retorno normal del navegador).
+PAYPAL_WEBHOOK_ID=
+
+# --- Facturación electrónica SRI — cómo hablarle al microservicio ---
+# El certificado .p12 y su contraseña YA NO se configuran acá — viven en
+# sri_facturacion_service/.env (ver la sección de instalación de ese
+# servicio). Acá solo se configura cómo contactarlo:
+FACTURACION_ELECTRONICA_SERVICE_URL=http://localhost:8002
+# Debe coincidir EXACTO con el API_KEY del .env de sri_facturacion_service/.
+FACTURACION_ELECTRONICA_SERVICE_API_KEY=elegí-una-cadena-larga-y-aleatoria
+# Opcional (default 10 segundos).
+FACTURACION_ELECTRONICA_SERVICE_TIMEOUT=10
+# Clave que un sistema EXTERNO debe mandar en el header X-API-Key para
+# consultar la API pública de verificación de comprobantes de este
+# proyecto (/facturacion-electronica/api/verificar/). No confundir con la
+# de arriba: esta protege a este proyecto, la de arriba es la que este
+# proyecto manda hacia el microservicio.
+SRI_VERIFICACION_API_KEY=otra-cadena-larga-y-aleatoria-distinta
+
+# --- URL pública real del sistema ---
+# Para que los links de los correos/WhatsApp, y las URLs de retorno de
+# PayPal, funcionen sin importar si estás corriendo en tu PC o en producción.
 SITE_URL=https://sales-project-dxoy.onrender.com
 ```
 
-Este archivo **nunca se sube a git** (ya está en `.gitignore`). Si no lo creas, el sistema sigue funcionando normalmente — solo que al crear usuarios o recuperar credenciales, el envío de correo/WhatsApp se omite silenciosamente (queda registrado como advertencia en la consola del servidor) en vez de fallar.
+Este archivo **nunca se sube a git** (ya está en `.gitignore`). Si no lo creas, el sistema sigue funcionando normalmente — solo que se omiten silenciosamente el envío de correo/WhatsApp, el cobro con PayPal, y la consulta al microservicio SRI (quedan registrados como advertencia en la consola del servidor en vez de fallar).
+
+### `.env` del microservicio (`sri_facturacion_service/.env`)
+
+Ver el detalle completo en [Instalación del microservicio — Paso 3](#instalación-del-microservicio-de-facturación-electrónica-sri). Resumen de sus variables: `SRI_CERTIFICADO_PATH`, `SRI_CERTIFICADO_PASSWORD`, `SRI_AMBIENTE` (`pruebas`/`produccion`), `API_KEY` (debe coincidir con `FACTURACION_ELECTRONICA_SERVICE_API_KEY` de arriba), `DATABASE_URL` (opcional), `DEBUG`. Este archivo también está cubierto por el `.gitignore` de la raíz (el patrón `.env` sin `/` se aplica a cualquier subcarpeta), igual que cualquier `.p12`/`.pfx` que copies en `certificados/`.
 
 ---
 
@@ -190,56 +364,54 @@ Este archivo **nunca se sube a git** (ya está en `.gitignore`). Si no lo creas,
 ```
 sales_project/
 │
-├── manage.py                    # Script principal de administración Django
-├── requirements.txt              # Lista de dependencias del proyecto
-├── dbventas.sqlite3              # Base de datos SQLite (se genera automáticamente)
-├── .env                          # Variables de entorno locales (no versionado)
+├── manage.py                     # Script principal de administración Django
+├── requirements.txt               # Dependencias del proyecto principal
+├── dbventas.sqlite3               # Base de datos SQLite (se genera automáticamente)
+├── .env                           # Variables de entorno del proyecto principal (no versionado)
 │
-├── config/                       # Configuración principal del proyecto Django
-│   ├── settings.py               # BD, apps, middleware, templates, media, email, twilio
-│   ├── urls.py                   # URLs raíz: reparte tráfico a cada app
-│   ├── asgi.py / wsgi.py         # Puntos de entrada del servidor
+├── config/                        # Configuración principal del proyecto Django
+│   ├── settings.py                # BD, apps, middleware, email, twilio, paypal, microservicio SRI
+│   ├── urls.py                    # URLs raíz: reparte tráfico a cada app
+│   └── asgi.py / wsgi.py          # Puntos de entrada del servidor
 │
-├── billing/                      # App principal: catálogo, clientes y facturación
-│   ├── models.py                 # Brand, ProductGroup, Supplier, Product, Customer, Invoice...
-│   ├── forms.py                  # Formularios de billing
-│   ├── views.py                  # Vistas FBV y CBV de billing
-│   ├── urls.py                   # Rutas de billing (app_name = 'billing')
-│   ├── export_mixins.py          # Mixin genérico para exportar a PDF y Excel
-│   ├── admin.py                  # Registro en el panel /admin/
-│   ├── migrations/
-│   └── templates/billing/
-│
-├── purchasing/                   # App de compras (actualiza el inventario)
-│   ├── models.py                 # Purchase, PurchaseDetail
-│   ├── forms.py                  # PurchaseForm, PurchaseDetailFormSet
-│   ├── views.py
-│   ├── urls.py                   # app_name = 'purchasing'
-│   └── templates/purchasing/
-│
-├── security/                     # App de seguridad: usuarios, roles y permisos
-│   ├── models.py                 # UserProfile (teléfono/WhatsApp del usuario)
-│   ├── forms.py                  # UserRegisterForm, UserUpdateForm, RecoverCredentialsForm...
-│   ├── views.py                  # Login, registro, roles, permisos, recuperación de acceso
-│   ├── urls.py                   # app_name = 'security'
-│   ├── templatetags/security_tags.py  # Filtro {{ user|has_group:"Administrador" }}
-│   ├── management/commands/setup_roles.py  # Crea/sincroniza los 3 roles del sistema
-│   └── templates/security/
-│
-├── home/                          # App del dashboard (pantalla de inicio por rol)
-│   ├── views.py                   # Elige la plantilla según el rol del usuario
-│   └── urls.py
-│
-├── shared/                        # Código reutilizable entre todas las apps
-│   ├── mixins.py                  # StaffRequiredMixin, GroupRequiredMixin, PermissionRequiredRedirectMixin
-│   ├── decorators.py              # @audit_action, permission_required_redirect
-│   ├── notifications.py           # send_credentials_email, send_whatsapp_message
-│   └── validators.py              # validate_cedula_ec
+├── billing/                       # Catálogo, clientes y facturación (venta + 3 formas de pago)
+├── purchasing/                    # Compras a proveedores (sube inventario)
+├── pagos/                         # Cuentas por pagar — abonos a compras a crédito
+├── cobros/                        # Cuentas por cobrar — abonos a facturas a crédito (incl. PayPal)
+├── caja/                          # Apertura/cierre/arqueo de caja por usuario
+├── devoluciones/                  # Devoluciones de ventas (repone stock, ajusta factura)
+├── paypal_pagos/                  # Integración real con la API de PayPal (Sandbox/Live)
+├── facturacion_electronica/       # Cliente HTTP hacia sri_facturacion_service (ver más abajo)
+├── notificaciones/                # Alertas internas del sistema (campanita)
+├── reportes/                      # Reportes de ventas/compras/inventario/caja (sin modelos propios)
+├── configuracion/                 # Configuración global del sistema (singleton: IVA, empresa, SRI...)
+├── security/                      # Usuarios, roles, permisos, recuperación de acceso
+├── home/                          # Dashboard según el rol del usuario
+├── shared/                        # Código reutilizable entre todas las apps (no es una app Django)
 │
 ├── templates/                     # Plantillas globales (fuera de cada app)
-│   └── registration/              # login.html, password_reset_confirm.html, etc.
+│   ├── registration/               # login.html, password_reset_confirm.html, etc.
+│   └── emails/                     # Plantillas HTML de todos los correos (ver Notificaciones)
 │
-└── media/                         # Archivos subidos por usuarios (imágenes de productos)
+└── media/                         # Archivos subidos por usuarios (imágenes, adjuntos)
+
+sri_facturacion_service/           # ← proyecto FastAPI INDEPENDIENTE, hermano del anterior
+├── main.py                        # Rutas HTTP + autenticación por X-API-Key
+├── services.py                    # Orquesta todo el flujo (reservar → armar → firmar → enviar → consultar)
+├── models.py                      # SQLModel: ComprobanteElectronico, SecuencialSRI
+├── schemas.py                     # Validación del payload de entrada (Pydantic)
+├── config.py                      # Carga el .env propio (pydantic-settings)
+├── database.py                    # Motor y sesión SQLite (o Postgres vía DATABASE_URL)
+├── claveacceso.py                 # Genera la clave de acceso de 49 dígitos (aritmética pura)
+├── firma.py                       # Firma XAdES-BES del XML con el certificado .p12
+├── client.py                      # Cliente SOAP (zeep) contra los web services del SRI
+├── xml_builder.py                 # Arma el XML del comprobante (esquema factura v2.1.0)
+├── ride.py                        # Genera el PDF del RIDE al vuelo (reportlab + barcode)
+├── requirements.txt                # Dependencias propias (FastAPI, no Django)
+├── .env                            # Variables de entorno propias (no versionado)
+├── certificados/                   # Certificado .p12 (no versionado)
+├── db.sqlite3                      # Base de datos propia (no versionado)
+└── test_*.py                       # Tests propios (pytest)
 ```
 
 ---
@@ -261,23 +433,28 @@ En este proyecto, `config/urls.py` es el punto de entrada: reparte cada URL a la
 ```python
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('accounts/', include('django.contrib.auth.urls')),   # login/logout/reset de Django
-    path('security/', include('security.urls')),               # /security/... usuarios, roles, permisos
-    path('purchases/', include('purchasing.urls')),            # /purchases/... compras
-    path('', include('home.urls')),                             # / → dashboard
-    path('', include('billing.urls')),                          # /products/, /customers/, etc.
+    path('accounts/', include('django.contrib.auth.urls')),
+    path('security/', include('security.urls')),
+    path('purchases/', include('purchasing.urls')),
+    path('pagos/', include('pagos.urls')),
+    path('cobros/', include('cobros.urls')),
+    path('caja/', include('caja.urls')),
+    path('devoluciones/', include('devoluciones.urls')),
+    path('notificaciones/', include('notificaciones.urls')),
+    path('reportes/', include('reportes.urls')),
+    path('configuracion/', include('configuracion.urls')),
+    path('paypal/', include('paypal_pagos.urls')),
+    path('facturacion-electronica/', include('facturacion_electronica.urls')),
+    path('', include('home.urls')),
+    path('', include('billing.urls')),
 ]
 ```
 
-Cada app sigue el mismo patrón interno:
+Cada app sigue el mismo patrón interno: **Modelo → Formulario → Vista → URL → Plantilla** (ver la guía completa en [Cómo crear un CRUD desde cero](#cómo-crear-un-crud-desde-cero-guía-para-principiantes)). Todo el acceso a la base de datos pasa por el **ORM** de Django — nunca se escribe SQL a mano en este proyecto.
 
-1. **`models.py`** — define las tablas (una clase = una tabla). Django genera el SQL automáticamente.
-2. **`forms.py`** — define qué campos se piden en un formulario HTML y cómo se validan, ligados (o no) a un modelo.
-3. **`views.py`** — la lógica: recibe la petición, valida permisos, lee/guarda con el ORM, decide qué template renderizar.
-4. **`urls.py`** — mapea una URL (ej. `/products/create/`) a una función o clase de `views.py`.
-5. **`templates/<app>/`** — el HTML que ve el usuario, con `{{ variables }}` y `{% tags %}` de Django.
+### La segunda pieza: el microservicio
 
-Todo el acceso a la base de datos pasa por el **ORM** de Django (`Model.objects.filter(...)`, `.create(...)`, etc.) — nunca se escribe SQL a mano en este proyecto.
+`sri_facturacion_service/` NO sigue este patrón — es FastAPI, no Django, y no tiene templates ni ORM de Django. Su única razón de ser es aislar la firma electrónica y la comunicación con el SRI en un servicio separado, reutilizable desde cualquier otro proyecto (no solo este), y que pueda desplegarse/reiniciarse/actualizarse de forma independiente. La comunicación entre ambos es siempre HTTP síncrono con autenticación por header `X-API-Key` — ver el detalle completo en [Facturación electrónica](#facturación-electrónica-sri--ecuador).
 
 ---
 
@@ -286,36 +463,81 @@ Todo el acceso a la base de datos pasa por el **ORM** de Django (`Model.objects.
 ### config/
 Carpeta de configuración principal (no es una app en sí misma).
 
-- **`settings.py`** — base de datos, apps instaladas, middleware, templates, archivos media/estáticos, email (Gmail), WhatsApp (Twilio), URL pública (`SITE_URL`), idioma (`es-ec`).
+- **`settings.py`** — base de datos, apps instaladas, middleware, templates, archivos media/estáticos, email (Gmail), WhatsApp (Twilio), PayPal, microservicio de facturación SRI, idioma (`es-ec`).
 - **`urls.py`** — reparte las URLs raíz a cada app, y sirve `/media/` explícitamente (funciona en desarrollo **y** en producción).
 
 ### billing/
 App principal del sistema. Gestiona catálogo, clientes y facturación.
 
-- **`models.py`** — `Brand`, `ProductGroup`, `Supplier`, `Product` (con `image` e imagen autogenerada `placeholder_image` cuando no hay foto), `Customer`, `CustomerProfile`, `Invoice`, `InvoiceDetail`.
-- **`forms.py`** — formularios con widgets Bootstrap y validaciones (`clean_<campo>`).
-- **`views.py`** — mezcla de vistas por función (FBV: Brand, Invoice) y por clase (CBV: Product, Customer, Supplier con `CreateView`/`UpdateView`/`DeleteView`/`DetailView`). Todas protegidas con permisos reales de Django (ver [Sistema de Roles y Permisos](#sistema-de-roles-y-permisos)).
+- **`models.py`** — `Brand`, `ProductGroup`, `Supplier`, `Product`, `Customer`, `CustomerProfile`, `Invoice` (con `tipo_pago` contado/crédito, `forma_pago` efectivo/tarjeta/paypal, `estado` pendiente/pagada, `saldo`, datos de tarjeta informativos), `InvoiceDetail`.
+- **`views.py`** — mezcla de FBV y CBV, todas protegidas con permisos reales. `_finalizar_venta()` es la función central que crea la factura, descuenta stock, dispara el comprobante SRI, registra el movimiento de caja y envía el correo de confirmación — la reutilizan tanto la venta de mostrador como el flujo de PayPal.
 - **`export_mixins.py`** — `ExportMixin`, reutilizable para exportar cualquier queryset a Excel o PDF.
 
 ### purchasing/
 App del módulo de compras. Reutiliza modelos de `billing` (`Supplier`, `Product`).
 
-- **`models.py`** — `Purchase` (cabecera) y `PurchaseDetail` (líneas, con `unit_cost`). Restricción: no se puede repetir el mismo número de documento para el mismo proveedor.
-- **`views.py`** — al confirmar una compra, sube el stock del producto y actualiza `last_cost` automáticamente.
+- **`models.py`** — `Purchase` (cabecera) y `PurchaseDetail` (líneas). Al confirmar una compra, sube el stock del producto y actualiza `last_cost`.
+
+### pagos/ — cuentas por pagar (a proveedores)
+Registra abonos a compras a crédito. Cada pago recalcula, dentro de una transacción (`select_for_update`), el saldo y estado de la `Purchase` asociada.
+
+- **`PagoCompra`** — abono a una compra; `forma_pago` (efectivo/**tarjeta**/paypal — tarjeta y paypal son ambos informativos acá, sin ninguna integración real: pagarle a un proveedor de verdad por PayPal necesitaría la API de *Payouts*, distinta a la que ya usa el resto del sistema, y quedó fuera de alcance a propósito), `valor`, `observacion`, más `tarjeta_titular`/`tarjeta_cvv`/`tarjeta_expiracion` cuando la forma de pago es tarjeta. Efectivo y tarjeta exigen una `SesionCaja` abierta (solo efectivo genera `MovimientoCaja`). Al registrarse, envía un comprobante PDF por correo/WhatsApp al proveedor.
+- **URLs** (`/pagos/`): `pendientes/`, `crear/<compra_id>/`, `historial/`, `<pk>/editar/`, `<pk>/eliminar/`, `<pk>/pdf/`.
+
+### cobros/ — cuentas por cobrar (a clientes)
+Espejo de `pagos` del lado de ventas: abonos a facturas a crédito, con el mismo patrón transaccional. Acá `forma_pago = paypal` sí puede corresponder a un cobro real capturado por `paypal_pagos`.
+
+- **`CobroFactura`** — abono a una factura; `forma_pago` (efectivo/**tarjeta**/paypal — tarjeta se elige en este mismo formulario, igual que efectivo; paypal sigue siendo un botón/formulario separado que sí cobra de verdad, ver `cobro_paypal_iniciar`), `monto_recibido`, property `cambio` para cobros en efectivo, más `tarjeta_titular`/`tarjeta_cvv`/`tarjeta_expiracion` cuando la forma de pago es tarjeta. Efectivo y tarjeta exigen una `SesionCaja` abierta (solo efectivo genera `MovimientoCaja`).
+- **URLs** (`/cobros/`): `pendientes/`, `crear/<factura_id>/`, `crear/<factura_id>/paypal/`, `historial/`, `<pk>/editar/`, `<pk>/eliminar/`, `<pk>/pdf/`.
+
+### caja/ — control de caja
+Maneja jornadas de caja por usuario: apertura con monto inicial, movimientos de ingreso/egreso, cierre con arqueo (comparación de lo contado contra lo esperado por el sistema).
+
+- **`SesionCaja`** — jornada de un usuario; properties `total_ingresos`, `total_egresos`, `monto_esperado_cierre`, `diferencia`.
+- **`MovimientoCaja`** — ingreso/egreso, opcionalmente ligado a la `Invoice`/`PagoCompra`/`CobroFactura` que lo generó.
+- **URLs** (`/caja/`): `abrir/`, `historial/`, `<pk>/`, `<pk>/cerrar/`, `<pk>/movimiento/nuevo/`.
+
+### devoluciones/ — devoluciones de ventas
+Registra devoluciones (totales o parciales) sobre facturas ya emitidas: repone stock, reduce subtotal/tax/total/saldo de la factura, y genera un egreso en caja si la venta original fue en efectivo. **No envía ningún correo/WhatsApp al procesar una devolución** (a diferencia de la mayoría de las otras operaciones de dinero del sistema).
+
+- **`DevolucionVenta`** (cabecera) + **`DevolucionDetalle`** (línea devuelta, valida no exceder lo disponible). Función `registrar_devolucion()` orquesta el efecto transaccional completo.
+- **URLs** (`/devoluciones/`): `crear/<factura_id>/`, `historial/`, `<pk>/`.
+
+### paypal_pagos/ — cobro real con PayPal
+Ver la sección dedicada [Pagos con PayPal](#pagos-con-paypal).
+
+### facturacion_electronica/ — cliente de la facturación SRI
+Ver la sección dedicada [Facturación electrónica](#facturación-electrónica-sri--ecuador).
+
+### notificaciones/ — alertas internas (campanita + Telegram)
+Sistema de notificaciones **internas** dentro de la interfaz — no son correos ni WhatsApp. Cubre: stock bajo (también dispara un correo, ver la tabla en [Notificaciones](#notificaciones-email-y-whatsapp)), diferencia de caja al cierre, productos por vencer, y pagos pendientes por vencer. Las 4 además se mandan a un chat de Telegram, si está configurado (ver más abajo) — antes solo quedaban visibles adentro del sistema.
+
+- **`Notificacion`** — tipo/nivel/mensaje/usuario (`null` = visible para todos con permiso)/url/leída/clave (evita duplicar la misma alerta mientras siga sin leerse).
+- **`notificaciones/services.py`** — funciones que crean cada tipo de alerta, todas a través del helper interno `_crear_si_no_existe()`, que es el único punto donde se llama a `send_telegram_message()` (así las 4 alertas quedan cubiertas sin repetir esa llamada en cada una). `sincronizar_productos_por_vencer`/`sincronizar_pagos_pendientes` se ejecutan con el comando `python manage.py generar_notificaciones` (no hay cron/Celery configurado — hay que programarlo o correrlo a mano periódicamente).
+- **URLs** (`/notificaciones/`): `` (lista), `<pk>/marcar-leida/`, `marcar-todas-leidas/`.
+
+### reportes/ — reportes del negocio
+Sin modelos propios: solo vistas que consultan datos de otras apps.
+
+- **URLs** (`/reportes/`): `` (índice), `ventas/`, `compras/`, `inventario/`, `caja/`.
+
+### configuracion/ — configuración global del sistema
+Panel de configuración única (singleton, siempre `pk=1`, `ConfiguracionSistema.get_solo()`) para no tener valores hardcodeados: IVA, datos de la empresa, umbrales de stock/vencimiento, % de crédito, y los datos de numeración SRI que **no son secretos** (`sri_establecimiento`, `sri_punto_emision`, `sri_obligado_contabilidad`, `sri_nombre_comercial` — el certificado y su contraseña sí son secretos y viven en el `.env` del microservicio, nunca acá).
+
+- **URLs** (`/configuracion/`): `` (editar).
 
 ### security/
 App de seguridad: usuarios, roles, permisos y recuperación de acceso.
 
-- **`models.py`** — `UserProfile`: perfil 1-a-1 con el `User` de Django, agrega el campo `phone` (teléfono/WhatsApp) que Django no trae por defecto.
-- **`forms.py`** — `UserRegisterForm` (alta de usuario por el admin, con validaciones de correo/teléfono duplicado), `UserUpdateForm` (edición), `RecoverCredentialsForm` (correo + canal de envío).
-- **`views.py`** — login personalizado, alta/edición/borrado de usuarios (solo administradores), gestión de roles (`Group`), gestión de permisos por rol/usuario, recuperación de credenciales por correo o WhatsApp.
-- **`management/commands/setup_roles.py`** — comando (`python manage.py setup_roles`) que crea/sincroniza los 3 roles del sistema con sus permisos base.
+- **`models.py`** — `UserProfile`: perfil 1-a-1 con el `User` de Django, agrega `phone`.
+- **`views.py`** — login personalizado, alta/edición/borrado de usuarios (solo administradores), gestión de roles y permisos, recuperación de credenciales por correo o WhatsApp, cambio de contraseña con código de verificación.
+- **`management/commands/setup_roles.py`** — crea/sincroniza los 3 roles del sistema.
 
 ### home/
-App pequeña que solo decide qué dashboard mostrar según el rol del usuario logueado (`home_admin.html`, `home_vendedor.html`, `home_compras.html`).
+App pequeña que solo decide qué dashboard mostrar según el rol del usuario logueado.
 
 ### shared/
-Módulo transversal reutilizable por cualquier app (ver sección dedicada más abajo).
+Código transversal reutilizado por cualquier app (no es una app Django registrada en `INSTALLED_APPS`, es un paquete de utilidades) — ver la sección dedicada más abajo.
 
 ---
 
@@ -362,7 +584,7 @@ ROLES = {
 }
 ```
 
-Correr `python manage.py setup_roles` crea los grupos si no existen y sincroniza sus permisos (`group.permissions.set(...)`). **Esto es solo el punto de partida** — después, un administrador puede ajustar los permisos de cada rol libremente desde la pantalla de Gestión de Permisos, y esos cambios se aplican de inmediato a todos los usuarios de ese rol.
+Correr `python manage.py setup_roles` crea los grupos si no existen y sincroniza sus permisos. **Esto es solo el punto de partida** — después, un administrador puede ajustar los permisos de cada rol libremente desde la pantalla de Gestión de Permisos, y esos cambios se aplican de inmediato a todos los usuarios de ese rol.
 
 ### La pantalla de Gestión de Permisos (`/security/permissions/`)
 
@@ -376,21 +598,175 @@ Correr `python manage.py setup_roles` crea los grupos si no existen y sincroniza
 
 ## Notificaciones (Email y WhatsApp)
 
-`shared/notifications.py` centraliza el envío:
+`shared/notifications.py` centraliza **todo** el envío — ninguna vista arma un correo o WhatsApp por su cuenta. Todas sus funciones son *best-effort*: si el envío falla (o si no configuraste el `.env`), registran una advertencia en la consola y devuelven `False`, para que el resto de la operación (crear la factura, el usuario, etc.) se complete igual.
 
-```python
-send_credentials_email(to_email, subject, body)   # SMTP de Gmail
-send_whatsapp_message(phone, body)                 # API de Twilio
-```
+### Funciones disponibles
 
-Ambas funciones **nunca lanzan una excepción hacia la vista** — si falla el envío (o si no configuraste el `.env`), registran una advertencia en la consola y devuelven `False`, para que el resto de la operación (crear el usuario, por ejemplo) se complete igual.
+| Función | Qué hace |
+|---|---|
+| `get_admin_recipients()` | Lista `(nombre, email)` de todos los usuarios activos con correo que son administradores — la usan todos los correos que avisan a un admin de un evento. |
+| `send_credentials_email(to_email, subject, body, html_template=None, html_context=None)` | Correo simple. Sin `html_template` manda solo texto plano (comportamiento clásico); con `html_template` arma un correo con versión HTML + texto. |
+| `send_email_with_attachment(...)` | Igual, con **un** archivo adjunto (ej. comprobante de pago). |
+| `send_email_with_attachments(...)` | Igual, con **varios** adjuntos (ej. factura + RIDE + XML del SRI). |
+| `send_whatsapp_message(phone, body)` | Envía WhatsApp vía Twilio. Sin credenciales configuradas, no intenta enviar. |
 
-Se usan en dos flujos:
+Cada correo con `html_template` recibe automáticamente (sin que cada llamado lo repita) el nombre de la empresa, la URL pública del sitio, el año actual y el correo de soporte — ver `_contexto_base()` dentro del mismo archivo.
 
-1. **Alta de usuario** (`security/views.py` → `RegisterView`): al crear un usuario con su rol, se le envían sus credenciales (usuario, contraseña, rol, link de acceso) por correo **y** WhatsApp automáticamente.
-2. **Recuperar credenciales** (`/security/recover/`): el usuario ingresa su correo y elige el canal (correo o WhatsApp); el sistema genera un link de restablecimiento de contraseña seguro (con el mecanismo de tokens propio de Django) y lo envía por ese canal.
+### Plantillas HTML (`templates/emails/`)
 
-El link que reciben siempre apunta a `settings.SITE_URL` (la URL pública real, ej. `https://sales-project-dxoy.onrender.com`), nunca a `localhost`, sin importar desde dónde el administrador esté operando.
+Un layout compartido (`base_email.html`, con header degradado, tarjeta central y footer, todo con `<table>` y estilos inline para que se vea bien también en Outlook) más 5 partials reutilizables (`_button.html`, `_alert.html`, `_data_row.html`, `_divider.html`, `_pedido_stepper.html`) y **24 plantillas concretas**, una por tipo de correo.
+
+### Qué evento dispara qué correo
+
+| Evento | Plantilla | ¿WhatsApp también? |
+|---|---|---|
+| Se crea un usuario nuevo | `bienvenida.html` (al usuario, con sus credenciales) | Sí |
+| Se crea un usuario nuevo | `nuevo_usuario_registrado.html` (aviso a cada admin) | No |
+| Recuperar credenciales (canal correo) | `recuperar_password.html` | Alternativa por WhatsApp si se elige ese canal |
+| Código para cambiar contraseña (Mi Perfil) | Solo texto plano, sin plantilla HTML | No |
+| Contraseña actualizada (Mi Perfil) | `password_cambiada.html` | No |
+| Se bloquea una cuenta | `cuenta_bloqueada.html` | Sí |
+| Se desbloquea una cuenta | `cuenta_desbloqueada.html` | Sí |
+| Cambia el rol de un usuario | `cambio_rol_usuario.html` | Sí |
+| Otra edición de cuenta (datos/reseteo de contraseña por admin) | `actualizacion_cuenta.html` | Sí |
+| Se registra un proveedor nuevo | `nuevo_proveedor_registrado.html` (a cada admin) | No |
+| Se registra un cliente nuevo | `nuevo_cliente_registrado.html` (a cada admin) | No |
+| Se finaliza una venta/factura | `confirmacion_compra.html` (factura + RIDE + XML SRI adjuntos si están listos) | Sí |
+| Stock por debajo del mínimo | `inventario_bajo.html` (a cada admin, solo la primera vez) | No — pero sí a Telegram |
+| Se registra una compra a proveedor | `compra_proveedor_registrada.html` (a cada admin) | No |
+| Se paga a un proveedor | `pago_proveedor_realizado.html` (comprobante PDF al proveedor) | Sí |
+| Se cobra/abona una factura | `confirmacion_pago.html` (comprobante PDF al cliente) | Sí |
+| Diferencia de caja al cierre | — (solo notificación interna + Telegram, **sin correo**) | No — pero sí a Telegram |
+| Producto por vencer / pago pendiente por vencer | — (solo notificación interna + Telegram, **sin correo**) | No — pero sí a Telegram |
+
+### Plantillas ya diseñadas pero sin ningún evento conectado todavía
+
+Estas 9 plantillas existen y se ven bien, pero **ningún código las dispara hoy** — quedaron listas para cuando se construya la funcionalidad que les corresponde:
+
+- `verificacion_correo.html` — no hay auto-registro público de cuentas todavía.
+- `nuevo_dispositivo.html` — no hay detección de dispositivo/IP nuevo en el login.
+- `factura_disponible.html` — la factura ya se manda adjunta en `confirmacion_compra.html`, no hay un aviso separado.
+- `pedido_recibido.html` / `pedido_enviado.html` / `pedido_entregado.html` — no existe todavía un flujo de "pedido" con esos 3 estados.
+- `notificacion_general.html` — plantilla comodín para futuros avisos genéricos.
+- `error_sistema.html` — no hay un manejador de errores que dispare un aviso a soporte.
+- `reembolso_realizado.html` — `devoluciones/` no envía ningún correo todavía al procesar una devolución.
+
+### WhatsApp (Twilio)
+
+`send_whatsapp_message(phone, body)` usa el SDK de Twilio para mandar un mensaje de texto simple a `whatsapp:{phone}`. Sin adjuntos (la API simple de Twilio no soporta archivos sin alojarlos antes en una URL pública). Se obtienen credenciales gratuitas de prueba en https://www.twilio.com/ activando el "WhatsApp Sandbox".
+
+El link que reciben los correos/WhatsApp siempre apunta a `settings.SITE_URL` (la URL pública real), nunca a `localhost`, sin importar desde dónde el administrador esté operando.
+
+### Telegram (alertas internas del sistema)
+
+A diferencia de correo/WhatsApp (que van a la persona específica del evento — un cliente, un proveedor, un usuario), Telegram acá se usa para **un solo chat fijo de administradores**: `send_telegram_message(body)` en `shared/notifications.py` manda el mensaje a un único `TELEGRAM_CHAT_ID` configurado en el `.env`, usando la API HTTP de bots de Telegram (`https://api.telegram.org/bot<token>/sendMessage`) — no hace falta ninguna librería nueva, se usa `requests` (que el proyecto ya tenía).
+
+Está conectado a dos niveles distintos de aviso:
+
+1. **Las 4 alertas internas curadas** que antes solo se veían en la campanita del sistema (`notificaciones/services.py`): stock bajo, diferencia de caja al cierre, producto por vencer, y pago pendiente por vencer — las 4 pasan por el mismo helper interno `_crear_si_no_existe()`.
+2. **Un registro de actividad amplio** (`notificaciones/signals.py`), conectado una sola vez en `NotificacionesConfig.ready()`, que escucha los signals `post_save`/`post_delete` de Django para **cualquier alta, edición o borrado** en las apps de negocio del sistema (`billing`, `purchasing`, `security`, `pagos`, `cobros`, `caja`, `devoluciones`, `configuracion`, `paypal_pagos`, `facturacion_electronica`, más `User`/`Group` de `auth`), y el signal `user_logged_in` para avisar quién inició sesión y cuándo. Esto es intencionalmente amplio ("factura creada", "nuevo usuario", "se editó un proveedor", etc.) — **no** crea entradas en la campanita (esa sigue siendo solo para las 4 alertas accionables de arriba), solo manda a Telegram. Se excluyen `auth.Permission` (Django la reescribe en cada `migrate`, es ruido) y el propio modelo `Notificacion` (para no generar un aviso de "se creó una notificación" por cada alerta ya avisada).
+
+> Con esto activado vas a recibir bastantes mensajes — cada venta, cada compra, cada alta de cliente/proveedor, cada login, etc. Si en algún momento resulta demasiado, la lista de apps rastreadas está en `notificaciones/signals.py -> _APPS_RASTREADAS` (quitar una app de ahí deja de avisar sus cambios).
+
+**Cómo activarlo:**
+1. Hablar con [@BotFather](https://t.me/BotFather) en Telegram y crear un bot nuevo con `/newbot` — te da un **token**.
+2. Agregar ese bot al chat o grupo donde quieras recibir los avisos (puede ser un chat personal con el bot, o un grupo con varios administradores).
+3. Mandarle cualquier mensaje al bot en ese chat, y después visitar `https://api.telegram.org/bot<TU_TOKEN>/getUpdates` en el navegador — ahí aparece el **Chat ID** (`"chat":{"id": ...}`) que hay que copiar.
+4. Completar `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en el `.env` del proyecto principal (ver [Variables de entorno](#variables-de-entorno-env)).
+
+Sin estas dos variables configuradas, el sistema sigue funcionando exactamente igual — `send_telegram_message` solo registra una advertencia y no manda nada (mismo criterio best-effort que el resto de este archivo).
+
+---
+
+## Facturación electrónica (SRI — Ecuador)
+
+Genera, firma y envía al SRI el comprobante electrónico de cada factura, y permite descargar su XML y su RIDE (representación impresa). Es **best-effort**: un problema acá (SRI caído, certificado mal configurado, microservicio apagado) nunca revierte ni bloquea la venta ya completada — el criterio es el mismo que para correo/WhatsApp.
+
+### Los dos lados
+
+| | `facturacion_electronica/` (Django) | `sri_facturacion_service/` (FastAPI) |
+|---|---|---|
+| Rol | Cliente HTTP — traduce `Invoice` al formato genérico y llama al microservicio | Hace todo el trabajo real: arma el XML, lo firma, lo envía al SRI, consulta autorización, genera el RIDE |
+| Base de datos | `ComprobanteElectronico` local, espejo de lo que devuelve el microservicio | `ComprobanteElectronico` propio, con el JSON completo del pedido y los 3 XML |
+| ¿Conoce certificados/firma? | No, nunca | Sí, es el único que los toca |
+
+### Flujo paso a paso (dentro del microservicio)
+
+1. **Reservar secuencial y clave de acceso** — un contador (`SecuencialSRI`) estrictamente incremental por establecimiento + punto de emisión + tipo de comprobante (el SRI exige numeración correlativa sin huecos). El **ambiente** (pruebas/producción) lo decide siempre la configuración propia del microservicio (`SRI_AMBIENTE` de su `.env`), nunca el proyecto Django — así la clave de acceso nunca queda codificada con un ambiente distinto al que realmente se usó para enviarla.
+2. **Armar el XML** (esquema `factura` v2.1.0 del SRI) a partir de un payload genérico (emisor, comprador, líneas, forma de pago, totales) — el microservicio no conoce el modelo `Invoice` de Django, solo este formato genérico.
+3. **Firmar XAdES-BES** con el certificado `.p12` (`cryptography` + `lxml`) — si el certificado no está configurado o la contraseña es incorrecta, el comprobante queda en estado `error` con el motivo, sin romper nada más.
+4. **Enviar por SOAP** (librería `zeep`) al web service de recepción del SRI (`pruebas`: `celcer.sri.gob.ec`; `producción`: `cel.sri.gob.ec`). El SRI responde `RECIBIDA` o `DEVUELTA` (con los mensajes de error si rechazó el XML).
+5. **Consultar autorización** — si quedó `RECIBIDA`, se consulta automáticamente al SRI si ya lo autorizó. Puede volver `AUTORIZADO`, `NO AUTORIZADO`, o `EN PROCESO` (para reintentar la consulta más tarde con el botón "Consultar Autorización").
+6. **RIDE** — no se guarda un PDF; se genera al vuelo cada vez que se pide, a partir del JSON del pedido original guardado en el comprobante.
+
+Estados posibles de un comprobante: `generado` → `firmado` → `enviado`/`recibida` → `autorizado` / `no_autorizado` / `devuelta` / `error` / `en_proceso`.
+
+### Dónde se dispara
+
+`billing/views.py` → `_finalizar_venta()` llama a `generar_y_enviar_comprobante(invoice)` justo después de calcular los totales definitivos de la venta, antes de registrar el movimiento de caja y enviar el correo de confirmación (que adjunta el RIDE/XML si ya están listos en ese momento).
+
+### Qué ve el usuario (`invoice_detail.html`)
+
+Un badge con el estado (verde = autorizado, rojo = error/no autorizado/devuelta, gris = en trámite), la clave de acceso (con botón de copiar), el número de autorización si existe, y el último mensaje de error si lo hay. Botones: **Descargar RIDE**, **Descargar XML**, **Consultar en el SRI** (enlace externo al portal público, solo en producción), **Consultar Autorización** (mientras esté en trámite), y **Reintentar Generación** (si quedó en error/devuelta/no autorizado).
+
+### Instalación y variables de entorno
+
+Ver [Instalación del microservicio de facturación electrónica](#instalación-del-microservicio-de-facturación-electrónica-sri) y la sección [Variables de entorno](#variables-de-entorno-env) — ahí está el detalle completo de cómo activarlo, qué `.env` necesita cada lado, y en qué puerto corre.
+
+### Limitaciones honestas (documentadas en el propio código)
+
+- Solo soporta el comprobante **factura** (código SRI `01`) — no notas de crédito/débito, guías de remisión, ni retenciones.
+- No soporta ICE, IRBPNR, subsidio de combustibles, ni líneas exentas/no objeto de IVA (siempre van en $0.00).
+- La firma XAdES-BES se verificó criptográficamente (carga el certificado y firma con la clave correcta), pero **no se probó una aceptación real contra el ambiente de producción del SRI** en este entorno de desarrollo — antes de emitir facturas reales, hacé una prueba real en el ambiente de `pruebas` del SRI con tu propio certificado.
+
+---
+
+## Pagos con PayPal
+
+`paypal_pagos/` conecta el sistema con la **API REST real de PayPal** (no un SDK oficial — un cliente propio hecho con `requests`, para evitar una dependencia pesada). Es la única forma de pago del sistema que de verdad mueve dinero a través de un tercero real.
+
+### El modelo puente: `OrdenPaypal`
+
+Como el pago con PayPal es asíncrono (el navegador sale del sitio hacia paypal.com y vuelve), hace falta un lugar donde guardar el estado mientras el cliente está pagando afuera. **La `Invoice` o el `CobroFactura` reales nunca se crean al iniciar el pago** — solo cuando PayPal confirma que el dinero se capturó de verdad. Si el cliente cancela o cierra la pestaña, no queda ninguna venta a medias.
+
+Estados de una orden: `creada` → `capturada` / `cancelada` / `fallida`.
+
+### Flujo paso a paso
+
+1. El usuario elige "PayPal" como forma de pago (en una factura nueva, o para pagar/abonar una factura a crédito ya existente).
+2. El servidor crea una orden real en PayPal (Orders API v2, `POST /v2/checkout/orders`) y guarda una `OrdenPaypal` en estado `creada`.
+3. El servidor redirige al usuario al checkout real de **paypal.com** para que apruebe el pago con su cuenta.
+4. Ahí pasa uno de dos caminos (no excluyentes, es un respaldo del otro):
+   - **Retorno del navegador** (`/paypal/return/`): si el usuario aprueba, PayPal lo trae de vuelta al sitio; el servidor captura el pago (`POST /v2/checkout/orders/{id}/capture`) y, si quedó `COMPLETED`, recién ahí crea la `Invoice`/`CobroFactura` real.
+   - **Webhook** (`/paypal/webhook/`): PayPal también manda una notificación servidor-a-servidor por si el usuario cierra la pestaña antes de volver. Esta ruta valida la firma de la notificación contra `PAYPAL_WEBHOOK_ID` antes de procesar nada.
+5. **Cancelación** (`/paypal/cancel/`): si el usuario cancela en paypal.com, solo se marca la orden como `cancelada` — no hay nada que revertir porque nunca se creó nada real.
+
+La confirmación es **idempotente**: si tanto el retorno del navegador como el webhook llegan a procesar la misma orden, solo se crea la factura/cobro una vez.
+
+### Autenticación con PayPal
+
+`obtener_access_token()` hace un OAuth2 `client_credentials` contra PayPal usando `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` como usuario/clave. El sistema apunta a `api-m.sandbox.paypal.com` o a `api-m.paypal.com` según `PAYPAL_MODE`.
+
+### Cómo activarlo (conseguir credenciales reales)
+
+1. Crear una cuenta en https://developer.paypal.com/ (podés usar tu cuenta normal de PayPal).
+2. En el dashboard, crear una **App** — te da un `Client ID` y un `Client Secret` de **Sandbox** (para pruebas, con dinero ficticio) y otro par para **Live** (dinero real).
+3. Copiar esas credenciales al `.env` del proyecto principal: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, y `PAYPAL_MODE=sandbox` (o `live` cuando el negocio esté listo para cobrar de verdad).
+4. **Opcional pero recomendado** — registrar un webhook en el mismo dashboard apuntando a `https://tu-dominio-público/paypal/webhook/`, y copiar el `Webhook ID` generado a `PAYPAL_WEBHOOK_ID` en el `.env`. Sin esto, el sistema sigue funcionando con el retorno normal del navegador (paso 4 de arriba), pero pierde el respaldo del webhook si el usuario cierra la pestaña antes de volver.
+
+> En Sandbox, PayPal te da cuentas de prueba (comprador y vendedor) con dinero ficticio para probar el flujo completo sin arriesgar dinero real — se gestionan desde el mismo dashboard de desarrolladores.
+
+---
+
+## Formas de pago del sistema
+
+El sistema ofrece hasta 3 formas de pago en los 3 lugares donde de verdad se paga o se cobra dinero — crear una factura (`billing`), pagarle a un proveedor (`pagos`) y cobrar una factura a crédito (`cobros`) — es importante entender que **solo una de ellas mueve dinero de verdad a través de un tercero**:
+
+| Forma de pago | ¿Pasarela real? | Qué pasa en el sistema |
+|---|---|---|
+| **Efectivo** | No aplica (dinero físico) | Se registra el monto recibido y el cambio; entra a la caja abierta del usuario. |
+| **Tarjeta** | **No — es una simulación visual** | Una animación de tarjeta (con detección de marca Visa/Mastercard/Amex) y un modal de "Pasarela de Pago" simulan el cobro. El número de tarjeta **nunca se envía al servidor** (el campo no tiene `name`); se guardan titular, CVV/CVC y expiración, como constancia de que el cobro se hizo por un datáfono físico externo al sistema (guardar el CVV es una decisión consciente pese a ir contra PCI-DSS, documentada como tal en el código). No hay Stripe ni ningún procesador real integrado. Disponible en **facturas**, **pagos a proveedores** y **cobros a clientes** — en pagos/cobros exige una `SesionCaja` abierta igual que efectivo, pero nunca genera `MovimientoCaja`. |
+| **PayPal** | **Solo en facturas y cobros — API real** | Ver [Pagos con PayPal](#pagos-con-paypal) arriba: se crea una orden real, el cliente paga en paypal.com, y la factura/cobro se genera solo tras la confirmación real de PayPal. **En "pagos" (pagarle a un proveedor) sigue siendo solo informativo** — pagar de verdad por PayPal a un tercero necesitaría la API de *Payouts*, distinta a la de *Orders/Checkout* que ya usa el resto del sistema, y quedó fuera de alcance a propósito. |
 
 ---
 
@@ -438,8 +814,17 @@ Propiedades: `inventory_value` (stock × precio) y `placeholder_image` (imagen S
 | first_name / last_name | CharField | Nombres |
 | email / phone / address | — | Datos de contacto |
 
-### Invoice (Factura) / Purchase (Compra)
-Cabeceras con `subtotal`, `tax` (IVA) y `total` calculados. `Purchase` tiene restricción de `document_number` único por `supplier`.
+### Invoice (Factura)
+Cabecera con `subtotal`, `tax` (IVA) y `total` calculados, más `tipo_pago` (contado/crédito), `forma_pago` (efectivo/tarjeta/paypal — solo aplica a contado), `estado` (pendiente/pagada), `saldo`, `meses_credito`/`interes` (financiamiento), `monto_recibido` (efectivo), y datos informativos de tarjeta (`tarjeta_titular`, `tarjeta_cvv`, `tarjeta_expiracion` — nunca el número completo de la tarjeta). Relacionada 1-a-1 (opcional) con `ComprobanteElectronico` del SRI.
+
+### Purchase (Compra)
+Cabecera con `subtotal`/`tax`/`total`. Restricción de `document_number` único por `supplier`.
+
+### ComprobanteElectronico (facturación SRI, lado Django)
+Espejo local de lo que procesó el microservicio: `clave_acceso`, `estado`, los 3 XML, número/fecha de autorización, mensajes — ver [Facturación electrónica](#facturación-electrónica-sri--ecuador).
+
+### OrdenPaypal
+Puente entre "se creó una orden en PayPal" y "el pago se confirmó" — ver [Pagos con PayPal](#pagos-con-paypal).
 
 ### UserProfile (security)
 | Campo | Tipo | Descripción |
@@ -453,10 +838,10 @@ Cabeceras con `subtotal`, `tax` (IVA) y `total` calculados. `Purchase` tiene res
 
 ### Autenticación y acceso
 - Login personalizado (`/accounts/login/` o `/security/login/`), con recuperación de credenciales por correo/WhatsApp — **no hay auto-registro público**: los usuarios los crea un administrador con un rol asignado.
-- Todas las vistas protegidas con `@login_required` / `LoginRequiredMixin`, y las de negocio además con permisos reales por rol (ver arriba).
+- Todas las vistas protegidas con `@login_required` / `LoginRequiredMixin`, y las de negocio además con permisos reales por rol.
 
 ### Dashboard
-Pantalla distinta según el rol del usuario, con conteos y gráficos (marcas, productos, clientes, facturas, compras, stock bajo).
+Pantalla distinta según el rol del usuario, con conteos y gráficos.
 
 ### Buscadores, filtros y paginación
 Todos los listados tienen búsqueda y filtros que se mantienen al paginar (10 registros por página).
@@ -465,10 +850,19 @@ Todos los listados tienen búsqueda y filtros que se mantienen al paginar (10 re
 Botones PDF y Excel en cada listado, exportan exactamente lo que está filtrado en pantalla.
 
 ### Facturación dinámica
-Precio autocompletado al elegir producto, cálculo en tiempo real de subtotal/IVA/total, validación de stock suficiente, y baja de stock al confirmar.
+Precio autocompletado al elegir producto, cálculo en tiempo real de subtotal/IVA/total, validación de stock suficiente, baja de stock al confirmar, 3 formas de pago (ver arriba), y generación best-effort del comprobante electrónico SRI.
 
 ### Módulo de Compras
 Productos filtrados por proveedor, sube el stock y actualiza `last_cost` al registrar la compra, reporte de costo promedio por producto.
+
+### Cuentas por cobrar / pagar y Caja
+Abonos parciales a facturas y compras a crédito (con comprobante PDF por correo/WhatsApp), y control de caja por jornada (apertura, movimientos, cierre con arqueo).
+
+### Devoluciones
+Devolución total o parcial de una venta, con reposición de stock y ajuste automático de la factura.
+
+### Notificaciones internas
+Alertas de stock bajo, productos por vencer, pagos pendientes por vencer, y diferencias de caja al cierre.
 
 ### Gestión de Usuarios, Roles y Permisos
 Ver la sección [Sistema de Roles y Permisos](#sistema-de-roles-y-permisos).
@@ -504,6 +898,45 @@ Ver la sección [Sistema de Roles y Permisos](#sistema-de-roles-y-permisos).
 | `/purchases/<id>/delete/` | Eliminar |
 | `/purchases/report/` | Reporte de costos |
 
+### Pagos y Cobros
+| URL | Descripción |
+|---|---|
+| `/pagos/pendientes/` | Compras a crédito con saldo pendiente |
+| `/pagos/crear/<compra_id>/` | Registrar abono a un proveedor |
+| `/cobros/pendientes/` | Facturas a crédito con saldo pendiente |
+| `/cobros/crear/<factura_id>/` | Registrar abono/cobro de un cliente |
+| `/cobros/crear/<factura_id>/paypal/` | Cobrar el saldo con PayPal |
+
+### Caja y Devoluciones
+| URL | Descripción |
+|---|---|
+| `/caja/abrir/` | Abrir jornada de caja |
+| `/caja/<pk>/cerrar/` | Cerrar con arqueo |
+| `/devoluciones/crear/<factura_id>/` | Registrar devolución |
+
+### PayPal
+| URL | Descripción |
+|---|---|
+| `/paypal/return/` | Retorno del checkout de PayPal (confirma el pago) |
+| `/paypal/cancel/` | Cancelación desde PayPal |
+| `/paypal/webhook/` | Notificaciones servidor-a-servidor de PayPal |
+
+### Facturación electrónica (SRI)
+| URL | Descripción |
+|---|---|
+| `/facturacion-electronica/facturas/<invoice_id>/reintentar/` | Generar/reintentar el comprobante |
+| `/facturacion-electronica/<pk>/consultar-autorizacion/` | Consultar autorización manualmente |
+| `/facturacion-electronica/<pk>/xml/` | Descargar el XML |
+| `/facturacion-electronica/<pk>/ride/` | Descargar el RIDE (PDF) |
+| `/facturacion-electronica/api/verificar/` | API pública de verificación (por clave de acceso o `invoice_id`) |
+
+### Notificaciones, Reportes y Configuración
+| URL | Descripción |
+|---|---|
+| `/notificaciones/` | Lista de alertas internas |
+| `/reportes/` | Índice de reportes (ventas, compras, inventario, caja) |
+| `/configuracion/` | Configuración global del sistema |
+
 ---
 
 ## Carpeta shared
@@ -531,7 +964,7 @@ Código transversal, reutilizado por cualquier app.
   ```
 
 ### `notifications.py`
-- **`send_credentials_email(to_email, subject, body)`** / **`send_whatsapp_message(phone, body)`** — ver [Notificaciones](#notificaciones-email-y-whatsapp).
+Ver [Notificaciones](#notificaciones-email-y-whatsapp) para el detalle completo de sus 5 funciones.
 
 ### `validators.py`
 - **`validate_cedula_ec`** — valida cédula ecuatoriana (10 dígitos) o RUC (13 dígitos) con el algoritmo oficial.
@@ -1187,21 +1620,41 @@ Panel de administración: `http://127.0.0.1:8000/admin/`
 
 ## Tecnologías utilizadas
 
+### Proyecto principal (Django)
+
 | Tecnología | Uso |
 |---|---|
 | Python 3.14 | Lenguaje principal |
 | Django 6.0.6 | Framework web |
 | SQLite | Base de datos |
 | Bootstrap 5.3 | Estilos UI |
-| JavaScript (vanilla) | Formularios dinámicos, filtros en vivo |
+| JavaScript (vanilla) | Formularios dinámicos, filtros en vivo, simulación visual de pago con tarjeta |
 | Pillow | Imágenes de productos |
 | openpyxl | Exportación Excel |
 | reportlab | Exportación PDF |
+| python-barcode | Códigos de barra |
+| requests | Cliente HTTP hacia PayPal y hacia el microservicio de facturación SRI |
 | whitenoise | Archivos estáticos/media en producción |
 | Twilio | Envío de WhatsApp |
 | SMTP de Gmail | Envío de correos |
+| API REST de PayPal | Cobro real (Sandbox/Live) |
 | django-extensions | shell_plus |
 | gunicorn | Servidor de producción (Render) |
+
+### Microservicio de facturación electrónica (FastAPI)
+
+| Tecnología | Uso |
+|---|---|
+| Python 3.14 | Lenguaje principal |
+| FastAPI + uvicorn | Framework web y servidor ASGI |
+| SQLModel (SQLAlchemy + Pydantic) | ORM y validación de datos |
+| SQLite (por defecto, cambiable a Postgres) | Base de datos propia |
+| lxml | Construcción y firma del XML |
+| cryptography | Lectura del certificado `.p12` y firma XAdES-BES |
+| zeep | Cliente SOAP contra los web services del SRI |
+| reportlab + python-barcode | Generación del PDF del RIDE |
+| pydantic-settings + python-dotenv | Configuración vía `.env` propio |
+| pytest + httpx | Tests propios |
 
 ---
 
